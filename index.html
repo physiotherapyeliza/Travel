@@ -24,8 +24,10 @@
   };
   // ▲▲▲▲▲
 
-  // ▼▼▼ Gemini AI 助手（免費）：到 https://aistudio.google.com/apikey 申請一組貼上 ▼▼▼
-  const GEMINI_API_KEY = "";  // 例如 "AIza...."，留空則 AI 區塊會提示去申請
+  // ▼▼▼ Gemini AI 助手：金鑰存在手機本機，不寫進程式碼（第一次用會跳出來問）▼▼▼
+  // 申請金鑰：https://aistudio.google.com/apikey
+  function getGeminiKey(){ try{ return localStorage.getItem("gemini_key")||""; }catch(e){ return ""; } }
+  function setGeminiKey(k){ try{ localStorage.setItem("gemini_key",k); }catch(e){} }
   // ▲▲▲▲▲
 
   window.__db = null;
@@ -358,6 +360,7 @@ function renderTripDetail(){
       <div class="mini" style="margin-bottom:8px">輸入要去的城市（每行一個，或用逗號分隔），AI 會依這趟 ${tripDays(t)||"的天數"} 幫你排觀光順序、推薦景點，給 3 個方案。</div>
       <textarea id="aiInput" placeholder="例：\n布拉格\n卡羅維瓦利\n庫倫諾夫">${esc(cityNames)}</textarea>
       <button class="chip" id="aiGo" style="margin-top:10px;width:100%;background:var(--sky);color:#fff;border-color:var(--sky)">✨ 幫我規劃 3 個方案</button>
+      <div style="text-align:right;margin-top:6px"><button class="chip" id="aiKey" style="font-size:12px;padding:4px 10px;border:none;background:none;color:var(--soft)">⚙️ 設定／更換金鑰</button></div>
       <div id="aiOut" class="aiout"></div>
     </div>`;
 
@@ -372,18 +375,37 @@ function renderTripDetail(){
   });
   main.querySelectorAll('[data-itemedit]').forEach(b=>b.onclick=()=>openItem(t.id,b.dataset.plan,b.dataset.itemedit));
   document.getElementById("aiGo").onclick=()=>askAI(t);
+  document.getElementById("aiKey").onclick=()=>showKeyForm(t);
 }
 
 /* ===== Gemini AI 行程助手 ===== */
+/* 金鑰輸入框：第一次用 AI 或要更換金鑰時呼叫 */
+function showKeyForm(t){
+  const cur=getGeminiKey();
+  openSheet(`<h3>設定 Gemini 金鑰</h3>
+    <div class="mini" style="margin-bottom:8px">金鑰只會存在這支手機，不會上傳、不會公開。<br>還沒有金鑰？到 <b>aistudio.google.com/apikey</b> 免費申請。</div>
+    <label>API 金鑰</label>
+    <input id="f_key" value="${esc(cur)}" placeholder="貼上你的 Gemini 金鑰" autocomplete="off">
+    <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
+      <button class="save" onclick="saveKey('${t.id}')">儲存</button></div>
+    ${cur?`<button class="del" onclick="clearKey()">清除這支手機上的金鑰</button>`:""}`);
+}
+function saveKey(tripId){
+  const k=document.getElementById("f_key").value.trim();
+  if(!k){ alert("請貼上金鑰"); return; }
+  setGeminiKey(k); closeSheet();
+  const t=trips.find(x=>x.id===tripId);
+  if(t){ render(); }
+}
+function clearKey(){ setGeminiKey(""); try{localStorage.removeItem("gemini_key");}catch(e){} closeSheet(); render(); }
+
 async function askAI(t){
   const out=document.getElementById("aiOut");
   const raw=document.getElementById("aiInput").value.trim();
   const cities=raw.split(/[\n,，、]/).map(s=>s.trim()).filter(Boolean);
   if(!cities.length){ out.innerHTML=`<div class="mini" style="color:var(--err)">請先輸入至少一個城市</div>`; return; }
-  if(!GEMINI_API_KEY){
-    out.innerHTML=`<div class="mini" style="color:var(--err)">尚未設定 Gemini API Key。請到 aistudio.google.com/apikey 免費申請一組，貼到程式碼最上方的 GEMINI_API_KEY。</div>`;
-    return;
-  }
+  let key=getGeminiKey();
+  if(!key){ showKeyForm(t); return; }
   const days=tripDays(t)||"未指定天數";
   const range=(t.start&&t.end)?`${fmtDT(t.start)} 到 ${fmtDT(t.end)}`:"時間未定";
   out.innerHTML=`<div class="mini" style="color:var(--sky)">✨ AI 規劃中，請稍候…</div>`;
@@ -399,7 +421,7 @@ async function askAI(t){
     const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent`;
     const res=await fetch(url,{
       method:"POST",
-      headers:{"Content-Type":"application/json","X-goog-api-key":GEMINI_API_KEY},
+      headers:{"Content-Type":"application/json","X-goog-api-key":key},
       body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})
     });
     if(!res.ok){ const e=await res.text(); throw new Error("HTTP "+res.status+" "+e.slice(0,200)); }
