@@ -147,6 +147,38 @@
   .airesult{background:var(--card2);border-radius:14px;padding:13px;font-size:14px;line-height:1.7;
     white-space:normal;word-break:break-word;}
   .airesult b{color:var(--sky-deep);}
+
+  .aiplan{background:var(--card2);border-radius:14px;padding:12px;margin-top:10px;}
+  .aiplan-h{font-weight:800;color:var(--sky-deep);font-size:15px;margin-bottom:4px;}
+
+  /* 定案路線圖 */
+  .routebox{background:linear-gradient(135deg,var(--sun-soft),var(--card2));border:2px solid var(--sun);
+    border-radius:18px;padding:16px;margin-bottom:14px;}
+  .routestop{display:flex;align-items:center;gap:10px;}
+  .routedot{font-size:22px;}
+  .routecity{font-size:15px;}
+  .routestep{font-size:18px;margin:2px 0 2px 4px;opacity:.7;}
+  .flytag{background:var(--sky);color:#fff;font-size:11px;padding:2px 8px;border-radius:9px;margin-left:6px;font-weight:700;}
+
+  /* 方案橫向滑動 */
+  .planscroll{display:flex;gap:12px;overflow-x:auto;padding:4px 2px 12px;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;}
+  .plancard{flex:0 0 80%;max-width:80%;scroll-snap-align:center;background:var(--card);
+    border:2px solid var(--line);border-radius:18px;padding:14px;}
+  .plancard.decided{border-color:var(--sun);background:#fffaf3;}
+  .leg{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--line);}
+  .legmove{display:flex;flex-direction:column;gap:1px;}
+  .legbtn{border:none;background:var(--card2);border-radius:6px;width:24px;height:18px;font-size:10px;
+    color:var(--sky-deep);cursor:pointer;padding:0;line-height:1;}
+  .legbtn:disabled{opacity:.3;cursor:default;}
+  .legcity{flex:1;font-size:14px;font-weight:600;}
+  .flymini{color:var(--sky);font-size:12px;}
+  .legdays{border:2px solid var(--line);background:var(--card);border-radius:10px;padding:3px 8px;
+    font-size:13px;font-weight:700;color:var(--sky-deep);cursor:pointer;white-space:nowrap;}
+  .legfly{border:none;background:none;font-size:14px;cursor:pointer;opacity:.55;padding:2px;}
+  .legdel{border:none;background:none;color:var(--err);font-size:14px;cursor:pointer;padding:2px;opacity:.6;}
+  .legdate{font-size:11px;color:var(--soft);font-weight:500;margin-top:1px;}
+  .checkok{margin-top:10px;background:#e7f3ec;color:var(--ok);border-radius:10px;padding:8px 10px;font-size:13px;font-weight:700;}
+  .checkwarn{margin-top:10px;background:#fbeae7;color:var(--err);border-radius:10px;padding:8px 10px;font-size:13px;font-weight:700;}
 </style>
 </head>
 <body>
@@ -177,7 +209,7 @@
 /* ===== 本機儲存 key ===== */
 const T_KEY="travel_trip", B_KEY="travel_budget", P_KEY="travel_pack", M_KEY="travel_memo";
 
-let trips  = load(T_KEY,[]);   // 旅程 {id,start,dest,end, plans:[{id,name,items:[{id,cat,name,note,done}]}]}
+let trips  = load(T_KEY,[]);   // 旅程 {id,dest,startDate,endDate,flight,decidedPlan, plans:[{id,name,legs:[{id,city,days,fly}]}]}
 let spends = load(B_KEY,[]);   // 花費 {id,date,cat,name,amt}
 let packs  = load(P_KEY,[]);   // 打包 {id,cat,name,done}
 let memos  = load(M_KEY,[]);   // 回憶 {id,date,title,body}
@@ -189,8 +221,6 @@ let tripNav = "list";          // 模擬行程頁內部導覽：list=旅程列�
 let openTripId = null;         // 進入 detail 時的旅程 id
 let tripDayFilter = "全部";
 let packCatFilter = "全部";
-
-const ITEM_CATS = ["交通","住宿","景點","其他"];
 
 const CATS = ["交通","住宿","餐飲","門票","購物","其他"];
 const PACK_CATS = ["證件","衣物","盥洗","電子","藥品","其他"];
@@ -267,7 +297,7 @@ function render(){
   const fab=document.getElementById("fab");
   fab.style.display="block";
   if(view==="trip"){
-    fab.textContent = tripNav==="detail" ? "＋ 新增城市" : "＋ 新增旅程";
+    fab.textContent = tripNav==="detail" ? "＋ 新增方案" : "＋ 新增旅程";
   }else{
     fab.textContent = view==="memo" ? "＋ 寫一則回憶"
                     : view==="pack" ? "＋ 新增物品"
@@ -284,7 +314,7 @@ function renderTripList(){
   const main=document.getElementById("main");
   let html=`<div class="countLine">共 ${trips.length} 趟旅程</div>`;
   if(!trips.length){
-    html+=`<div class="empty"><div class="big">還沒有任何旅程</div>按下方「＋ 新增旅程」開一趟新的，輸入出發、目的地和回程時間，就能在裡面做各種模擬安排。</div>`;
+    html+=`<div class="empty"><div class="big">還沒有任何旅程</div>按下方「＋ 新增旅程」開一趟新的，輸入出發、目的地和回程時間，就能在裡面排不同走法、互相比較。</div>`;
   }else{
     const list=trips.slice().sort((a,b)=>String(a.start||"").localeCompare(String(b.start||"")));
     html+=list.map(t=>{
@@ -293,9 +323,9 @@ function renderTripList(){
         <div class="row">
           <div style="flex:1">
             <div class="title">📍 ${esc(t.dest||"(未命名旅程)")}</div>
-            <div class="meta">${fmtDT(t.start)} → ${fmtDT(t.end)}</div>
+            <div class="meta">${fmtTripRange(t)}</div>
             <div style="margin-top:6px">
-              <span class="tag">${planN} 個城市</span>
+              <span class="tag">${planN} 個方案</span>
               ${tripDays(t)?`<span class="tag sun">${tripDays(t)}</span>`:""}
             </div>
           </div>
@@ -310,17 +340,19 @@ function renderTripList(){
   });
 }
 
-/* ----- 模擬行程：某趟旅程的方案 ----- */
+/* ----- 模擬行程：方案比較 + 定案路線 ----- */
 function renderTripDetail(){
   const main=document.getElementById("main");
   const t=trips.find(x=>x.id===openTripId);
   if(!t){ tripNav="list"; render(); return; }
   if(!Array.isArray(t.plans)) t.plans=[];
 
+  // 頂部：旅程資訊 + 返回
   let html=`<div class="card" style="background:var(--card2);border:none;margin-bottom:14px">
       <div class="row"><div style="flex:1">
         <div class="title">📍 ${esc(t.dest||"(未命名旅程)")}</div>
-        <div class="meta">${fmtDT(t.start)} → ${fmtDT(t.end)}${tripDays(t)?`　${tripDays(t)}`:""}</div>
+        <div class="meta">${fmtTripRange(t)}${tripDays(t)?`　${tripDays(t)}`:""}</div>
+        ${flightLine(t)}
       </div></div>
       <div style="display:flex;gap:8px;margin-top:10px">
         <button class="chip" data-edittrip="1">✎ 編輯旅程</button>
@@ -328,38 +360,49 @@ function renderTripDetail(){
       </div>
     </div>`;
 
-  html+=`<div class="countLine">這趟規劃了 ${t.plans.length} 個城市</div>`;
-  if(!t.plans.length){
-    html+=`<div class="empty"><div class="big">還沒有城市</div>按下方「＋ 新增城市」加入這趟要去的城市，例如「布拉格」「庫倫諾夫」，再分別安排交通、住宿、景點。或用下方的 AI 助手幫你排順序。</div>`;
-  }else{
-    html+=t.plans.map(p=>{
-      const items=p.items||[];
-      const byCat={}; items.forEach(it=>{(byCat[it.cat]=byCat[it.cat]||[]).push(it);});
-      const itemsHtml = items.length ? ITEM_CATS.filter(c=>byCat[c]).map(c=>
-        `<div style="margin-top:8px"><span class="tag ${c==='交通'||c==='住宿'?'':'sun'}">${c}</span>
-          ${byCat[c].map(it=>`<div class="mini" style="margin:4px 0 0 4px;display:flex;gap:6px;align-items:center">
-            <span data-itemtog="${it.id}" data-plan="${p.id}" class="ckbox" style="width:18px;height:18px;font-size:11px;${it.done?'background:var(--sky)':''}">${it.done?'✓':''}</span>
-            <span class="${it.done?'done':''}" data-itemedit="${it.id}" data-plan="${p.id}" style="flex:1">${esc(it.name)}${it.note?` — ${esc(it.note)}`:""}</span>
-          </div>`).join("")}</div>`).join("")
-        : `<div class="mini" style="margin-top:6px;color:var(--soft)">還沒有項目，點「＋ 加項目」開始安排</div>`;
-      return `<div class="card">
-        <div class="row">
-          <div class="title" style="flex:1">🏙️ ${esc(p.name)}</div>
-          <button class="chip" data-planedit="${p.id}" style="padding:4px 10px">✎</button>
-        </div>
-        ${itemsHtml}
-        <button class="chip" data-additem="${p.id}" style="margin-top:12px;width:100%;border-style:dashed">＋ 加項目（交通／住宿／景點）</button>
-      </div>`;
-    }).join("");
+  // 定案路線圖（選定方案後才出現）
+  const decided=t.plans.find(p=>p.id===t.decidedPlan);
+  if(decided && (decided.legs||[]).length){
+    const dts=computeLegDates(t,decided.legs);
+    html+=`<div class="routebox">
+        <div class="aihead" style="color:var(--sun);margin-bottom:10px">🧭 定案路線：${esc(decided.name)}</div>`;
+    decided.legs.forEach((lg,i)=>{
+      const fly = lg.fly==="in"?`<span class="flytag">入</span>`
+                : lg.fly==="out"?`<span class="flytag">出</span>`:"";
+      const dt=dts[i];
+      const dateStr = dt ? (dt.days>1 ? `${fmtMDObj(dt.start)}–${fmtMDObj(dt.end)}` : fmtMDObj(dt.start)) : "";
+      html+=`<div class="routestop">
+          <div class="routedot">🏙️</div>
+          <div class="routecity"><b>${esc(lg.city)}</b> <span class="mini">${dateStr}（${lg.days||0}天）</span> ${fly}</div>
+        </div>`;
+      if(i<decided.legs.length-1) html+=`<div class="routestep">👣</div>`;
+    });
+    // 回程航班吻合檢查
+    const last=lastDayOfPlan(t,decided.legs);
+    const back=t.flight&&t.flight.depBack?new Date(t.flight.depBack):null;
+    if(last&&back){
+      const sameDay = last.getFullYear()===back.getFullYear()&&last.getMonth()===back.getMonth()&&last.getDate()===back.getDate();
+      html+= sameDay
+        ? `<div class="checkok">✓ 最後一段 ${fmtMDObj(last)} 與回程班機 ${fmtMD(t.flight.depBack)} 吻合</div>`
+        : `<div class="checkwarn">⚠️ 最後一段是 ${fmtMDObj(last)}，但回程班機在 ${fmtMD(t.flight.depBack)}，請檢查天數安排</div>`;
+    }
+    html+=`</div>`;
   }
 
-  // AI 助手區塊
-  const cityNames=(t.plans||[]).map(p=>p.name).join("、");
+  // 方案比較（左右滑動）
+  html+=`<div class="countLine">${t.plans.length} 個方案，左右滑動比較</div>`;
+  if(!t.plans.length){
+    html+=`<div class="empty"><div class="big">還沒有方案</div>按下方「＋ 新增方案」排一種走法，或用下方 AI 助手生一個起始版本再手動調。</div>`;
+  }else{
+    html+=`<div class="planscroll">`+t.plans.map(p=>planCardHTML(t,p)).join("")+`</div>`;
+  }
+
+  // AI 助手（只建議停留天數，目前測試模式）
   html+=`<div class="aibox">
-      <div class="aihead">🤖 AI 行程助手</div>
-      <div class="mini" style="margin-bottom:8px">輸入要去的城市（每行一個，或用逗號分隔），AI 會依這趟 ${tripDays(t)||"的天數"} 幫你排觀光順序、推薦景點，給 3 個方案。</div>
-      <textarea id="aiInput" placeholder="例：\n布拉格\n卡羅維瓦利\n庫倫諾夫">${esc(cityNames)}</textarea>
-      <button class="chip" id="aiGo" style="margin-top:10px;width:100%;background:var(--sky);color:#fff;border-color:var(--sky)">✨ 幫我規劃 3 個方案</button>
+      <div class="aihead">🤖 AI 助手</div>
+      <div class="mini" style="margin-bottom:8px">輸入要去的城市，AI 依這趟 ${tripDays(t)||"的天數"} 生一個走法草稿（含各城建議停留天數），你再手動調。</div>
+      <textarea id="aiInput" placeholder="例：\n布拉格\n卡羅維瓦利\n庫倫諾夫"></textarea>
+      <button class="chip" id="aiGo" style="margin-top:10px;width:100%;background:var(--sky);color:#fff;border-color:var(--sky)">✨ 生一個起始方案</button>
       <div style="text-align:right;margin-top:6px"><button class="chip" id="aiKey" style="font-size:12px;padding:4px 10px;border:none;background:none;color:var(--soft)">⚙️ 設定／更換金鑰</button></div>
       <div id="aiOut" class="aiout"></div>
     </div>`;
@@ -367,15 +410,81 @@ function renderTripDetail(){
   main.innerHTML=html;
   main.querySelector('[data-backlist]').onclick=()=>{ tripNav="list"; openTripId=null; render(); };
   main.querySelector('[data-edittrip]').onclick=()=>openTrip(t.id);
-  main.querySelectorAll('[data-planedit]').forEach(b=>b.onclick=()=>openPlan(t.id,b.dataset.planedit));
-  main.querySelectorAll('[data-additem]').forEach(b=>b.onclick=()=>openItem(t.id,b.dataset.additem));
-  main.querySelectorAll('[data-itemtog]').forEach(b=>b.onclick=()=>{
-    const p=t.plans.find(x=>x.id===b.dataset.plan); const it=p.items.find(x=>x.id===b.dataset.itemtog);
-    if(it){ it.done=!it.done; saveTrips(); render(); }
-  });
-  main.querySelectorAll('[data-itemedit]').forEach(b=>b.onclick=()=>openItem(t.id,b.dataset.plan,b.dataset.itemedit));
+  bindPlanCardEvents(t);
   document.getElementById("aiGo").onclick=()=>askAI(t);
   document.getElementById("aiKey").onclick=()=>showKeyForm(t);
+}
+
+/* 單張方案卡 HTML */
+function planCardHTML(t,p){
+  const legs=p.legs||[];
+  const isDecided=p.id===t.decidedPlan;
+  const dts=computeLegDates(t,legs);
+  const legsHtml = legs.length ? legs.map((lg,i)=>{
+    const fly = lg.fly==="in"?" 入":lg.fly==="out"?" 出":"";
+    const dt=dts[i];
+    const dateStr = dt ? (dt.days>1 ? `${fmtMDObj(dt.start)}–${fmtMDObj(dt.end)}` : fmtMDObj(dt.start)) : "";
+    return `<div class="leg">
+        <div class="legmove">
+          <button class="legbtn" data-up="${p.id}|${lg.id}" ${i===0?'disabled':''}>▲</button>
+          <button class="legbtn" data-down="${p.id}|${lg.id}" ${i===legs.length-1?'disabled':''}>▼</button>
+        </div>
+        <div class="legcity">${i+1}. ${esc(lg.city)}<span class="flymini">${fly}</span>
+          ${dateStr?`<div class="legdate">${dateStr}</div>`:""}
+        </div>
+        <button class="legdays" data-days="${p.id}|${lg.id}">${lg.days||0}天</button>
+        <button class="legfly" data-fly="${p.id}|${lg.id}">✈️</button>
+        <button class="legdel" data-legdel="${p.id}|${lg.id}">✕</button>
+      </div>`;
+  }).join("") : `<div class="mini" style="color:var(--soft);padding:8px 0">還沒有停留段</div>`;
+  const total=legs.reduce((s,l)=>s+(Number(l.days)||0),0);
+  return `<div class="plancard ${isDecided?'decided':''}">
+      <div class="row" style="align-items:center">
+        <div class="title" style="flex:1;font-size:15px">${isDecided?'⭐ ':''}${esc(p.name)}</div>
+        <button class="chip" data-planedit="${p.id}" style="padding:3px 8px">✎</button>
+      </div>
+      <div class="mini" style="margin:2px 0 8px">共 ${legs.length} 段 ・ ${total} 天</div>
+      ${legsHtml}
+      <button class="chip" data-addleg="${p.id}" style="margin-top:8px;width:100%;border-style:dashed;font-size:13px">＋ 加一段</button>
+      <button class="chip ${isDecided?'':'decidebtn'}" data-decide="${p.id}" style="margin-top:8px;width:100%;${isDecided?'background:var(--sun);color:#fff;border-color:var(--sun)':'background:var(--sky-soft);color:var(--sky-deep);border-color:var(--sky)'}">${isDecided?'✓ 目前定案（再按取消）':'設為定案'}</button>
+    </div>`;
+}
+
+function bindPlanCardEvents(t){
+  const main=document.getElementById("main");
+  main.querySelectorAll('[data-planedit]').forEach(b=>b.onclick=()=>openPlan(t.id,b.dataset.planedit));
+  main.querySelectorAll('[data-addleg]').forEach(b=>b.onclick=()=>openLeg(t.id,b.dataset.addleg));
+  main.querySelectorAll('[data-decide]').forEach(b=>b.onclick=()=>{
+    t.decidedPlan = (t.decidedPlan===b.dataset.decide) ? null : b.dataset.decide;
+    saveTrips(); render();
+  });
+  main.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>moveLeg(t,b.dataset.up,-1));
+  main.querySelectorAll('[data-down]').forEach(b=>b.onclick=()=>moveLeg(t,b.dataset.down,1));
+  main.querySelectorAll('[data-days]').forEach(b=>b.onclick=()=>{
+    const [pid,lid]=b.dataset.days.split("|");
+    const p=t.plans.find(x=>x.id===pid); const lg=p.legs.find(x=>x.id===lid);
+    const v=prompt("這一段停留幾天？",lg.days||1);
+    if(v!==null){ lg.days=Math.max(0,parseInt(v)||0); saveTrips(); render(); }
+  });
+  main.querySelectorAll('[data-fly]').forEach(b=>b.onclick=()=>{
+    const [pid,lid]=b.dataset.fly.split("|");
+    const p=t.plans.find(x=>x.id===pid); const lg=p.legs.find(x=>x.id===lid);
+    lg.fly = lg.fly==="in"?"out":lg.fly==="out"?null:"in"; // 循環：無→出發→返程→無
+    saveTrips(); render();
+  });
+  main.querySelectorAll('[data-legdel]').forEach(b=>b.onclick=()=>{
+    const [pid,lid]=b.dataset.legdel.split("|");
+    const p=t.plans.find(x=>x.id===pid);
+    p.legs=p.legs.filter(x=>x.id!==lid); saveTrips(); render();
+  });
+}
+function moveLeg(t,key,dir){
+  const [pid,lid]=key.split("|");
+  const p=t.plans.find(x=>x.id===pid);
+  const i=p.legs.findIndex(x=>x.id===lid); const j=i+dir;
+  if(j<0||j>=p.legs.length) return;
+  [p.legs[i],p.legs[j]]=[p.legs[j],p.legs[i]];
+  saveTrips(); render();
 }
 
 /* ===== Gemini AI 行程助手 ===== */
@@ -399,41 +508,101 @@ function saveKey(tripId){
 }
 function clearKey(){ setGeminiKey(""); try{localStorage.removeItem("gemini_key");}catch(e){} closeSheet(); render(); }
 
+/* ===== 測試模式：true 時不呼叫 Gemini，直接用下面的範例方案 ===== */
+const DEMO_MODE = true;   // 測試完改成 false 即可改用真正的 Gemini
+// 範例方案：每個方案是一串停留段（城市+建議天數），同城市可重複（樞紐折返）
+const DEMO_PLANS = [
+  { name:"AI 草稿・順遊版", feature:"先大城後小鎮，一路向南不折返。",
+    legs:[ {city:"布拉格",days:3,fly:"in"}, {city:"卡羅維瓦利",days:1}, {city:"庫倫諾夫",days:2,fly:"out"} ] },
+  { name:"AI 草稿・樞紐折返版", feature:"以布拉格為樞紐進出，交通最省力。",
+    legs:[ {city:"布拉格",days:2,fly:"in"}, {city:"卡羅維瓦利",days:1}, {city:"布拉格",days:2}, {city:"庫倫諾夫",days:1}, {city:"布拉格",days:1,fly:"out"} ] }
+];
+
+
 async function askAI(t){
   const out=document.getElementById("aiOut");
   const raw=document.getElementById("aiInput").value.trim();
   const cities=raw.split(/[\n,，、]/).map(s=>s.trim()).filter(Boolean);
   if(!cities.length){ out.innerHTML=`<div class="mini" style="color:var(--err)">請先輸入至少一個城市</div>`; return; }
+
+  // 測試模式：直接用範例，不呼叫 Gemini
+  if(DEMO_MODE){
+    out.innerHTML=`<div class="mini" style="color:var(--sky)">✨ （測試模式）載入範例方案…</div>`;
+    setTimeout(()=>{ window.__aiPlans=DEMO_PLANS; renderAIPlans(t,DEMO_PLANS); },300);
+    return;
+  }
+
+  if(!cities.length){ out.innerHTML=`<div class="mini" style="color:var(--err)">請先輸入至少一個城市</div>`; return; }
   let key=getGeminiKey();
   if(!key){ showKeyForm(t); return; }
   const days=tripDays(t)||"未指定天數";
-  const range=(t.start&&t.end)?`${fmtDT(t.start)} 到 ${fmtDT(t.end)}`:"時間未定";
+  const range=fmtTripRange(t);
   out.innerHTML=`<div class="mini" style="color:var(--sky)">✨ AI 規劃中，請稍候…</div>`;
   document.getElementById("aiGo").disabled=true;
 
   const prompt=`你是專業的旅遊行程規劃師。我這趟旅程目的地是「${t.dest||"未定"}」，時間 ${range}，總共 ${days}。\n`+
     `我想去這些城市：${cities.join("、")}。\n`+
-    `請依據天數，幫我規劃「3 個不同的觀光順序方案」。每個方案請包含：\n`+
-    `1. 方案名稱與整體特色（一句話）\n2. 城市造訪順序與各城市建議停留天數\n3. 每個城市推薦 2-3 個必看景點\n`+
-    `4. 城市間的交通建議\n請用繁體中文，條理清楚、精簡實用。`;
+    `請考慮城市之間的交通便利性（交通不便時可以用某個樞紐城市折返），規劃 1-2 個可行的走法草稿。\n`+
+    `每個走法是一連串「停留段」，每段是一個城市住幾天，同一個城市可以出現多次（折返樞紐）。\n`+
+    `必須只回傳 JSON（不要任何說明文字、不要 markdown），格式如下：\n`+
+    `{"plans":[{"name":"走法名稱","feature":"一句話特色","legs":[{"city":"城市名","days":2}]}]}\n`+
+    `城市名只用我給的：${cities.join("、")}。days 是數字。全部用繁體中文。`;
 
   try{
     const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent`;
     const res=await fetch(url,{
       method:"POST",
       headers:{"Content-Type":"application/json","X-goog-api-key":key},
-      body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})
+      body:JSON.stringify({
+        contents:[{parts:[{text:prompt}]}],
+        generationConfig:{ responseMimeType:"application/json" }
+      })
     });
     if(!res.ok){ const e=await res.text(); throw new Error("HTTP "+res.status+" "+e.slice(0,200)); }
     const data=await res.json();
-    const text=data?.candidates?.[0]?.content?.parts?.map(p=>p.text).join("")||"（AI 沒有回傳內容）";
-    out.innerHTML=`<div class="airesult">${mdLite(text)}</div>
-      <div class="mini" style="margin-top:8px;color:var(--soft)">💡 看中哪個方案，可用上方「＋ 新增城市」把城市建出來，再到城市裡「＋ 加項目」填入景點。</div>`;
+    let text=data?.candidates?.[0]?.content?.parts?.map(p=>p.text).join("")||"";
+    let parsed=null;
+    try{ parsed=JSON.parse(text.replace(/```json|```/g,"").trim()); }catch(e){ parsed=null; }
+    if(parsed&&Array.isArray(parsed.plans)){
+      window.__aiPlans=parsed.plans;       // 暫存供加入按鈕使用
+      renderAIPlans(t,parsed.plans);
+    }else{
+      out.innerHTML=`<div class="airesult">${mdLite(text||"（AI 沒有回傳內容）")}</div>`;
+    }
   }catch(err){
     out.innerHTML=`<div class="mini" style="color:var(--err)">AI 規劃失敗：${esc(String(err.message||err))}</div>`;
   }finally{
     const g=document.getElementById("aiGo"); if(g) g.disabled=false;
   }
+}
+
+/* 把 AI 草稿渲染成「一鍵加入成新方案」 */
+function renderAIPlans(t,plans){
+  const out=document.getElementById("aiOut"); if(!out) return;
+  window.__aiDraft=plans;
+  let html="";
+  plans.forEach((pl,pi)=>{
+    const legs=pl.legs||[];
+    const total=legs.reduce((s,l)=>s+(Number(l.days)||0),0);
+    html+=`<div class="aiplan">
+        <div class="aiplan-h">${esc(pl.name||"走法草稿")}</div>
+        ${pl.feature?`<div class="mini" style="margin-bottom:6px">${esc(pl.feature)}</div>`:""}
+        <div class="mini">${legs.map((l,i)=>`${i+1}. ${esc(l.city)} ${l.days}天`).join("　→　")}</div>
+        <div class="mini" style="margin-top:2px;color:var(--soft)">合計 ${total} 天</div>
+        <button class="chip" data-usedraft="${pi}" style="margin-top:8px;width:100%;background:var(--sky-soft);color:var(--sky-deep);border-color:var(--sky)">＋ 加入成新方案</button>
+      </div>`;
+  });
+  html+=`<div class="mini" style="margin-top:8px;color:var(--soft)">💡 加入後可在上方方案卡裡手動調整順序、天數、標記搭飛機。</div>`;
+  out.innerHTML=html;
+  out.querySelectorAll("[data-usedraft]").forEach(b=>b.onclick=()=>{
+    const pl=window.__aiDraft[+b.dataset.usedraft];
+    if(!Array.isArray(t.plans)) t.plans=[];
+    t.plans.push({
+      id:uid(), name:pl.name||"AI 草稿",
+      legs:(pl.legs||[]).map(l=>({id:uid(),city:l.city,days:Number(l.days)||1,fly:l.fly||null}))
+    });
+    saveTrips(); render();
+  });
 }
 // 極簡 markdown→HTML（粗體、標題、清單、換行），已先 esc 防注入
 function mdLite(s){
@@ -446,15 +615,58 @@ function mdLite(s){
 }
 
 function tripDays(t){
-  if(!t.start||!t.end) return "";
-  const d=Math.round((new Date(t.end)-new Date(t.start))/86400000);
-  return d>0 ? `${d+1} 天 ${d} 夜` : "";
+  if(!t.startDate||!t.endDate) return "";
+  const d=Math.round((new Date(t.endDate)-new Date(t.startDate))/86400000);
+  return d>=0 ? `${d+1} 天 ${d} 夜` : "";
+}
+// 旅程日期顯示（月/日）
+function fmtTripRange(t){
+  if(!t.startDate) return "日期未定";
+  const s=fmtMD(t.startDate);
+  const e=t.endDate?fmtMD(t.endDate):"?";
+  return `${s} – ${e}`;
+}
+function fmtMD(s){
+  if(!s) return "";
+  const d=new Date(s); if(isNaN(d)) return esc(s);
+  return `${d.getMonth()+1}/${d.getDate()}`;
+}
+// 航班摘要（頂部顯示）
+function flightLine(t){
+  const f=t.flight||{};
+  if(!f.airline && !f.depOut && !f.depBack) return "";
+  let parts=[];
+  if(f.airline) parts.push(esc(f.airline));
+  if(f.depOut) parts.push(`✈️入 ${fmtDT(f.depOut)}${f.arrOut?`→${fmtDT(f.arrOut)}`:""}`);
+  if(f.depBack) parts.push(`✈️出 ${fmtDT(f.depBack)}${f.arrBack?`→${fmtDT(f.arrBack)}`:""}`);
+  return `<div class="mini" style="margin-top:6px;color:var(--sky-deep)">${parts.join("　")}</div>`;
 }
 function fmtDT(s){
   if(!s) return "未定";
   const d=new Date(s); if(isNaN(d)) return esc(s);
   const p=n=>String(n).padStart(2,"0");
   return `${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+// 依出發日 + 各段天數，推算每段的日期區間
+function computeLegDates(t,legs){
+  const out=[];
+  if(!t.startDate){ return legs.map(()=>null); }
+  let cursor=new Date(t.startDate);
+  legs.forEach(lg=>{
+    const days=Math.max(1,Number(lg.days)||1);
+    const start=new Date(cursor);
+    const end=new Date(cursor); end.setDate(end.getDate()+days-1);
+    out.push({start,end,days});
+    cursor.setDate(cursor.getDate()+days); // 下一段接續
+  });
+  return out;
+}
+function fmtMDObj(d){ return d? `${d.getMonth()+1}/${d.getDate()}` : ""; }
+// 推算方案最後一天，與回程航班日期比對
+function lastDayOfPlan(t,legs){
+  const dts=computeLegDates(t,legs);
+  const last=dts[dts.length-1];
+  return last? last.end : null;
 }
 
 /* ----- 記帳 ----- */
@@ -561,82 +773,105 @@ function openSheet(html){ sheet.innerHTML=html; mask.classList.add("on"); sheet.
 function closeSheet(){ mask.classList.remove("on"); sheet.classList.remove("on"); }
 mask.onclick=closeSheet;
 
-/* 旅程表單 */
+/* 旅程表單：日期區間 + 航班（選填） */
 function openTrip(id){
-  const t=id?trips.find(x=>x.id===id):{dest:"",start:"",end:""};
+  const t=id?trips.find(x=>x.id===id):{dest:"",startDate:"",endDate:"",flight:{}};
+  const f=t.flight||{};
   openSheet(`<h3>${id?"編輯旅程":"新增旅程"}</h3>
-    <label>目的地</label><input id="f_dest" value="${esc(t.dest)}" placeholder="例：京都">
-    <label>出發時間</label><input id="f_start" type="datetime-local" value="${esc(t.start||"")}">
-    <label>回程時間</label><input id="f_end" type="datetime-local" value="${esc(t.end||"")}">
+    <label>目的地</label><input id="f_dest" value="${esc(t.dest||"")}" placeholder="例：捷克">
+    <div style="display:flex;gap:10px">
+      <div style="flex:1"><label>出發日期</label><input id="f_sdate" type="date" value="${esc(t.startDate||"")}"></div>
+      <div style="flex:1"><label>回程日期</label><input id="f_edate" type="date" value="${esc(t.endDate||"")}"></div>
+    </div>
+
+    <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line)">
+      <div style="font-weight:800;color:var(--sky-deep);font-size:14px">✈️ 航班資訊（選填，可之後再補）</div>
+      <label>航空公司</label><input id="f_airline" value="${esc(f.airline||"")}" placeholder="例：長榮航空">
+      <div style="font-size:13px;color:var(--soft);font-weight:700;margin:12px 0 4px">去程</div>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1"><label style="margin-top:0">起飛</label><input id="f_dep_out" type="datetime-local" value="${esc(f.depOut||"")}"></div>
+        <div style="flex:1"><label style="margin-top:0">降落</label><input id="f_arr_out" type="datetime-local" value="${esc(f.arrOut||"")}"></div>
+      </div>
+      <div style="font-size:13px;color:var(--soft);font-weight:700;margin:12px 0 4px">回程</div>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1"><label style="margin-top:0">起飛</label><input id="f_dep_back" type="datetime-local" value="${esc(f.depBack||"")}"></div>
+        <div style="flex:1"><label style="margin-top:0">降落</label><input id="f_arr_back" type="datetime-local" value="${esc(f.arrBack||"")}"></div>
+      </div>
+    </div>
+
     <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
       <button class="save" onclick="saveTrip('${id||""}')">儲存</button></div>
     ${id?`<button class="del" onclick="delTrip('${id}')">刪除整趟旅程</button>`:""}`);
 }
 function saveTrip(id){
   const dest=document.getElementById("f_dest").value.trim(); if(!dest){alert("請輸入目的地");return;}
-  const o={dest,start:document.getElementById("f_start").value,end:document.getElementById("f_end").value};
+  const flight={
+    airline:document.getElementById("f_airline").value.trim(),
+    depOut:document.getElementById("f_dep_out").value,
+    arrOut:document.getElementById("f_arr_out").value,
+    depBack:document.getElementById("f_dep_back").value,
+    arrBack:document.getElementById("f_arr_back").value
+  };
+  const o={dest,
+    startDate:document.getElementById("f_sdate").value,
+    endDate:document.getElementById("f_edate").value,
+    flight };
   if(id){ Object.assign(trips.find(x=>x.id===id),o); }
-  else{ const nt={id:uid(),plans:[],...o}; trips.push(nt); }
+  else{ trips.push({id:uid(),plans:[],decidedPlan:null,...o}); }
   saveTrips(); closeSheet(); render();
 }
 function delTrip(id){
-  if(!confirm("確定刪除整趟旅程（含所有城市）？")) return;
+  if(!confirm("確定刪除整趟旅程（含所有方案）？")) return;
   trips=trips.filter(x=>x.id!==id); saveTrips(); closeSheet();
   tripNav="list"; openTripId=null; render();
 }
 
-/* 城市表單 */
+/* 方案表單（只有名稱） */
 function openPlan(tripId,planId){
   const t=trips.find(x=>x.id===tripId);
   const p=planId?(t.plans||[]).find(x=>x.id===planId):{name:""};
-  openSheet(`<h3>${planId?"編輯城市":"新增城市"}</h3>
-    <label>城市名稱</label><input id="f_pname" value="${esc(p.name)}" placeholder="例：布拉格">
+  openSheet(`<h3>${planId?"編輯方案":"新增方案"}</h3>
+    <label>方案名稱</label><input id="f_pname" value="${esc(p.name)}" placeholder="例：走法A、樞紐折返版">
     <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
       <button class="save" onclick="savePlan('${tripId}','${planId||""}')">儲存</button></div>
-    ${planId?`<button class="del" onclick="delPlan('${tripId}','${planId}')">刪除這個城市</button>`:""}`);
+    ${planId?`<button class="del" onclick="delPlan('${tripId}','${planId}')">刪除這個方案</button>`:""}`);
 }
 function savePlan(tripId,planId){
   const t=trips.find(x=>x.id===tripId); if(!Array.isArray(t.plans)) t.plans=[];
-  const name=document.getElementById("f_pname").value.trim(); if(!name){alert("請輸入城市名稱");return;}
+  const name=document.getElementById("f_pname").value.trim(); if(!name){alert("請輸入方案名稱");return;}
   if(planId){ Object.assign(t.plans.find(x=>x.id===planId),{name}); }
-  else{ t.plans.push({id:uid(),name,items:[]}); }
+  else{ t.plans.push({id:uid(),name,legs:[]}); }
   saveTrips(); closeSheet(); render();
 }
 function delPlan(tripId,planId){
   const t=trips.find(x=>x.id===tripId);
+  if(t.decidedPlan===planId) t.decidedPlan=null;
   t.plans=(t.plans||[]).filter(x=>x.id!==planId); saveTrips(); closeSheet(); render();
 }
 
-/* 城市內項目表單 */
-let itemCat="景點";
-function openItem(tripId,planId,itemId){
+/* 停留段表單（城市 + 天數） */
+function openLeg(tripId,planId,legId){
   const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
-  const it=itemId?(p.items||[]).find(x=>x.id===itemId):{cat:"景點",name:"",note:""};
-  itemCat=it.cat;
-  openSheet(`<h3>${itemId?"編輯項目":"加項目"}</h3>
-    <label>分類</label>
-    <div class="chip-row" id="icatpick">${ITEM_CATS.map(c=>`<button class="chip ${c===itemCat?'on':''}" data-c="${c}">${c}</button>`).join("")}</div>
-    <label>名稱</label><input id="f_iname" value="${esc(it.name)}" placeholder="例：搭新幹線／住四条飯店／清水寺">
-    <label>備註</label><textarea id="f_inote" placeholder="時間、價格、訂房連結、注意事項…">${esc(it.note||"")}</textarea>
+  const lg=legId?(p.legs||[]).find(x=>x.id===legId):{city:"",days:1};
+  openSheet(`<h3>${legId?"編輯停留段":"加一段停留"}</h3>
+    <label>城市</label><input id="f_city" value="${esc(lg.city||"")}" placeholder="例：布拉格（同城市可重複加）">
+    <label>停留天數</label><input id="f_days" type="number" inputmode="numeric" value="${lg.days||1}" placeholder="2">
     <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
-      <button class="save" onclick="saveItem('${tripId}','${planId}','${itemId||""}')">儲存</button></div>
-    ${itemId?`<button class="del" onclick="delItem('${tripId}','${planId}','${itemId}')">刪除這個項目</button>`:""}`);
-  document.querySelectorAll("#icatpick .chip").forEach(b=>b.onclick=()=>{
-    itemCat=b.dataset.c; document.querySelectorAll("#icatpick .chip").forEach(x=>x.classList.toggle("on",x===b));
-  });
+      <button class="save" onclick="saveLeg('${tripId}','${planId}','${legId||""}')">儲存</button></div>
+    ${legId?`<button class="del" onclick="delLeg('${tripId}','${planId}','${legId}')">刪除這一段</button>`:""}`);
 }
-function saveItem(tripId,planId,itemId){
+function saveLeg(tripId,planId,legId){
   const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
-  if(!Array.isArray(p.items)) p.items=[];
-  const name=document.getElementById("f_iname").value.trim(); if(!name){alert("請輸入名稱");return;}
-  const o={cat:itemCat,name,note:document.getElementById("f_inote").value.trim()};
-  if(itemId){ Object.assign(p.items.find(x=>x.id===itemId),o); }
-  else{ p.items.push({id:uid(),done:false,...o}); }
+  if(!Array.isArray(p.legs)) p.legs=[];
+  const city=document.getElementById("f_city").value.trim(); if(!city){alert("請輸入城市");return;}
+  const days=Math.max(0,parseInt(document.getElementById("f_days").value)||0);
+  if(legId){ Object.assign(p.legs.find(x=>x.id===legId),{city,days}); }
+  else{ p.legs.push({id:uid(),city,days,fly:null}); }
   saveTrips(); closeSheet(); render();
 }
-function delItem(tripId,planId,itemId){
+function delLeg(tripId,planId,legId){
   const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
-  p.items=(p.items||[]).filter(x=>x.id!==itemId); saveTrips(); closeSheet(); render();
+  p.legs=(p.legs||[]).filter(x=>x.id!==legId); saveTrips(); closeSheet(); render();
 }
 
 let spendCat="餐飲";
