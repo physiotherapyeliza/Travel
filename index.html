@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>旅遊手帳</title>
+<!--
+  使用說明（與居家 app 共用同一個 Firebase 專案）
+  1. 下面 FIREBASE_CONFIG 已填入與居家 app 相同的設定 → 自動共用同一個資料庫。
+  2. 旅遊資料存在 travel/{隱蔽碼}；居家資料在 home/{隱蔽碼}，兩邊可互讀。
+  3. 沒網路時自動只用本機儲存，照常可用。
+-->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+  // ▼▼▼ 與居家 app 相同的 Firebase 設定（共用同一專案才能互讀）▼▼▼
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyDu8fQdFy2nu31VHYhhrj-q93V-U69nlVE",
+    authDomain: "my-life-eba23.firebaseapp.com",
+    projectId: "my-life-eba23",
+    storageBucket: "my-life-eba23.firebasestorage.app",
+    messagingSenderId: "564889264526",
+    appId: "1:564889264526:web:ccb6ab2c3794b18a3484df"
+  };
+  // ▲▲▲▲▲
+
+  // ▼▼▼ Gemini AI 助手（免費）：到 https://aistudio.google.com/apikey 申請一組貼上 ▼▼▼
+  const GEMINI_API_KEY = "";  // 例如 "AIza...."，留空則 AI 區塊會提示去申請
+  // ▲▲▲▲▲
+
+  window.__db = null;
+  window.__hasFB = false;
+  try {
+    if (FIREBASE_CONFIG && FIREBASE_CONFIG.projectId) {
+      firebase.initializeApp(FIREBASE_CONFIG);
+      window.__db = firebase.firestore();
+      window.__hasFB = true;
+    }
+  } catch (e) {
+    console.warn("Firebase 初始化失敗，改用本機儲存", e);
+    window.__db = null; window.__hasFB = false;
+  }
+</script>
+
+<style>
+  :root{
+    /* 旅行天空色 — 與居家綠植色系區隔，但同樣柔和自然 */
+    --paper:#f3f6f8;       /* 淺天藍灰底 */
+    --ink:#33424d;         /* 深藍灰 文字 */
+    --soft:#86949e;        /* 灰藍 次要文字 */
+    --line:#dde6ea;        /* 淺分隔線 */
+    --card:#ffffff;        /* 白卡片 */
+    --card2:#e9f1f5;       /* 淺水藍 區塊底 */
+    --sky:#5b94b8;         /* 天藍 主色 */
+    --sky-deep:#427494;    /* 深天藍 */
+    --sky-soft:#d6e7f0;    /* 淡天藍 標籤底 */
+    --sun:#e2a45c;         /* 暖陽橘 次要 */
+    --sun-soft:#f6e3cd;    /* 淡橘 */
+    --coral:#dd7a6a;       /* 珊瑚 強調 */
+    --gold:#c89456;        /* 金額色 */
+    --ok:#5b9e7a; --err:#cf6b5b;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Microsoft JhengHei",sans-serif;
+    font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:560px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;}
+
+  header{padding:18px 16px 8px;}
+  .htop{display:flex;align-items:center;justify-content:space-between;}
+  h1{font-size:21px;margin:0;font-weight:800;letter-spacing:.5px;}
+  .sync-badge{font-size:12px;padding:4px 10px;border-radius:12px;background:var(--card2);color:var(--soft);white-space:nowrap;}
+  .sync-badge.ok{color:var(--ok);} .sync-badge.err{color:var(--err);}
+  .sync-badge.loading{color:var(--sky);}
+
+  .tabs{display:flex;gap:6px;padding:10px 16px 4px;flex-wrap:wrap;}
+  .tab{flex:1;min-width:72px;text-align:center;padding:9px 0;border:2px solid var(--line);border-radius:16px;
+    background:var(--card);color:var(--soft);font-size:13px;font-weight:700;cursor:pointer;transition:.15s;}
+  .tab.on{background:var(--sky);color:#fff;border-color:var(--sky);}
+
+  main{flex:1;padding:8px 16px 96px;overflow-y:auto;}
+  .countLine{font-size:13px;color:var(--soft);margin:6px 2px 12px;}
+
+  .card{background:var(--card);border:2px solid var(--line);border-radius:18px;padding:14px;margin-bottom:12px;}
+  .card .row{display:flex;align-items:flex-start;gap:10px;}
+  .card .title{font-weight:700;font-size:16px;flex:1;}
+  .card .meta{font-size:13px;color:var(--soft);margin-top:3px;}
+  .card .amt{color:var(--gold);font-weight:800;white-space:nowrap;}
+  .tag{display:inline-block;background:var(--sky-soft);color:var(--sky-deep);font-size:12px;
+    padding:2px 9px;border-radius:10px;margin:4px 4px 0 0;font-weight:700;}
+  .tag.sun{background:var(--sun-soft);color:#a96a26;}
+  .mini{font-size:12px;color:var(--soft);}
+  .done{opacity:.5;text-decoration:line-through;}
+
+  .empty{text-align:center;color:var(--soft);padding:48px 16px;}
+  .empty .big{font-size:17px;font-weight:700;color:var(--ink);margin-bottom:6px;}
+
+  .chip-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
+  .chip{padding:6px 12px;border:2px solid var(--line);border-radius:14px;background:var(--card);
+    color:var(--soft);font-size:13px;font-weight:700;cursor:pointer;}
+  .chip.on{background:var(--sky-soft);border-color:var(--sky);color:var(--sky-deep);}
+
+  .ckbox{width:24px;height:24px;border:2px solid var(--sky);border-radius:8px;flex-shrink:0;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff;background:var(--card);}
+  .ckbox.on{background:var(--sky);}
+
+  .summary{background:var(--card2);border-radius:16px;padding:14px;margin-bottom:14px;}
+  .summary .big{font-size:24px;font-weight:800;color:var(--sky-deep);}
+  .sumrow{display:flex;justify-content:space-between;padding:4px 0;font-size:14px;}
+  .sumrow b{color:var(--gold);}
+
+  .linkcard{background:linear-gradient(135deg,var(--sky-soft),var(--card2));border:2px solid var(--line);
+    border-radius:16px;padding:13px 14px;margin-bottom:14px;font-size:13px;}
+  .linkcard b{color:var(--sky-deep);}
+
+  .fab{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);max-width:528px;width:calc(100% - 32px);
+    background:var(--sky);color:#fff;border:none;border-radius:18px;padding:15px;font-size:16px;font-weight:800;
+    box-shadow:0 6px 20px rgba(66,116,148,.35);cursor:pointer;z-index:30;}
+
+  .mask{position:fixed;inset:0;background:rgba(40,55,65,.45);z-index:40;display:none;}
+  .mask.on{display:block;}
+  .sheet{position:fixed;left:0;right:0;bottom:0;background:var(--paper);z-index:50;border-radius:22px 22px 0 0;
+    padding:20px 18px calc(20px + env(safe-area-inset-bottom));max-width:560px;margin:0 auto;
+    transform:translateY(100%);transition:.25s;max-height:90vh;overflow-y:auto;}
+  .sheet.on{transform:translateY(0);}
+  .sheet h3{margin:0 0 14px;font-size:18px;}
+  label{display:block;font-size:13px;color:var(--soft);font-weight:700;margin:12px 0 5px;}
+  input,select,textarea{width:100%;border:2px solid var(--line);border-radius:13px;padding:11px;font-size:15px;
+    background:var(--card);color:var(--ink);font-family:inherit;}
+  textarea{resize:vertical;min-height:70px;}
+  .seg{display:flex;gap:6px;}
+  .seg button{flex:1;padding:10px;border:2px solid var(--line);border-radius:13px;background:var(--card);
+    color:var(--soft);font-weight:700;cursor:pointer;font-size:14px;}
+  .seg button.on{background:var(--sky);color:#fff;border-color:var(--sky);}
+  .btns{display:flex;gap:10px;margin-top:18px;}
+  .btns button{flex:1;padding:13px;border-radius:14px;font-size:16px;font-weight:800;cursor:pointer;border:2px solid var(--line);}
+  .btns .save{background:var(--sky);color:#fff;border-color:var(--sky);}
+  .btns .cancel{background:var(--card);color:var(--soft);}
+  .del{width:100%;margin-top:10px;padding:12px;border-radius:14px;border:2px solid var(--err);
+    background:var(--card);color:var(--err);font-weight:800;font-size:15px;cursor:pointer;}
+
+  .aibox{background:var(--card);border:2px dashed var(--sky);border-radius:18px;padding:14px;margin-bottom:12px;}
+  .aihead{font-weight:800;font-size:16px;color:var(--sky-deep);margin-bottom:6px;}
+  .aiout{margin-top:10px;}
+  .airesult{background:var(--card2);border-radius:14px;padding:13px;font-size:14px;line-height:1.7;
+    white-space:normal;word-break:break-word;}
+  .airesult b{color:var(--sky-deep);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="htop">
+      <h1>✈️ 旅遊手帳</h1>
+      <span id="syncBadge" class="sync-badge"></span>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab on" data-view="trip">模擬行程</button>
+    <button class="tab" data-view="budget">記帳</button>
+    <button class="tab" data-view="pack">打包</button>
+    <button class="tab" data-view="memo">回憶</button>
+  </div>
+
+  <main id="main"></main>
+
+  <button class="fab" id="fab">＋ 新增</button>
+</div>
+
+<div class="mask" id="mask"></div>
+<div class="sheet" id="sheet"></div>
+
+<script>
+/* ===== 本機儲存 key ===== */
+const T_KEY="travel_trip", B_KEY="travel_budget", P_KEY="travel_pack", M_KEY="travel_memo";
+
+let trips  = load(T_KEY,[]);   // 旅程 {id,start,dest,end, plans:[{id,name,items:[{id,cat,name,note,done}]}]}
+let spends = load(B_KEY,[]);   // 花費 {id,date,cat,name,amt}
+let packs  = load(P_KEY,[]);   // 打包 {id,cat,name,done}
+let memos  = load(M_KEY,[]);   // 回憶 {id,date,title,body}
+
+let homeData = null;           // 從居家 app 讀來的快照（互讀）
+
+let view = "trip";
+let tripNav = "list";          // 模擬行程頁內部導覽：list=旅程列表 / detail=某趟旅程的方案
+let openTripId = null;         // 進入 detail 時的旅程 id
+let tripDayFilter = "全部";
+let packCatFilter = "全部";
+
+const ITEM_CATS = ["交通","住宿","景點","其他"];
+
+const CATS = ["交通","住宿","餐飲","門票","購物","其他"];
+const PACK_CATS = ["證件","衣物","盥洗","電子","藥品","其他"];
+
+function load(k,d){ try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d} }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function esc(s){return String(s??"").replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));}
+function fmt(n){ return "$"+Number(n||0).toLocaleString(); }
+
+function saveTrips(){ localStorage.setItem(T_KEY,JSON.stringify(trips)); cloudPush(); }
+function saveSpends(){ localStorage.setItem(B_KEY,JSON.stringify(spends)); cloudPush(); }
+function savePacks(){ localStorage.setItem(P_KEY,JSON.stringify(packs)); cloudPush(); }
+function saveMemos(){ localStorage.setItem(M_KEY,JSON.stringify(memos)); cloudPush(); }
+
+/* ===== Firebase 雲端同步（與居家 app 同機制） ===== */
+// 旅遊資料存 travel/{隱蔽碼}；居家在 home/{同一隱蔽碼}，兩邊互讀。
+// ⚠️ 這串隱蔽碼是共用鑰匙，請與居家 app 保持一致、勿外流。
+const SHARE_DOC = "b4c6706064bdd9f616d2fa2172590726";
+const cloudRef = window.__db ? window.__db.collection("travel").doc(SHARE_DOC) : null;
+const homeRef  = window.__db ? window.__db.collection("home").doc(SHARE_DOC)   : null;
+
+let cloudReady=false, cloudSkipPush=false, cloudTimer=null;
+
+function cloudPush(){
+  if(!cloudRef) return;
+  if(cloudSkipPush){ cloudSkipPush=false; return; }
+  if(!cloudReady) return;
+  clearTimeout(cloudTimer);
+  cloudTimer=setTimeout(()=>{
+    cloudRef.set({ trips, spends, packs, memos, updatedAt:Date.now() })
+      .then(()=>setSyncBadge("ok"))
+      .catch(e=>{ console.warn("雲端儲存失敗",e); setSyncBadge("err"); });
+  },800);
+}
+function cloudInit(){
+  if(!cloudRef){ setSyncBadge("local"); return; }
+  setSyncBadge("loading");
+  cloudRef.onSnapshot(snap=>{
+    if(snap.exists){
+      const d=snap.data();
+      cloudSkipPush=true;
+      if(Array.isArray(d.trips))  trips=d.trips;
+      if(Array.isArray(d.spends)) spends=d.spends;
+      if(Array.isArray(d.packs))  packs=d.packs;
+      if(Array.isArray(d.memos))  memos=d.memos;
+      localStorage.setItem(T_KEY,JSON.stringify(trips));
+      localStorage.setItem(B_KEY,JSON.stringify(spends));
+      localStorage.setItem(P_KEY,JSON.stringify(packs));
+      localStorage.setItem(M_KEY,JSON.stringify(memos));
+      cloudReady=true; setSyncBadge("ok"); render();
+    }else{
+      cloudReady=true;
+      cloudRef.set({ trips, spends, packs, memos, updatedAt:Date.now() })
+        .then(()=>setSyncBadge("ok")).catch(()=>setSyncBadge("err"));
+    }
+  }, err=>{ console.warn("雲端讀取失敗",err); setSyncBadge("err"); cloudReady=false; });
+
+  // 互讀：監聽居家 app 的資料（唯讀，不回寫）
+  if(homeRef){
+    homeRef.onSnapshot(snap=>{
+      homeData = snap.exists ? snap.data() : null;
+      if(view==="budget") render();
+    }, e=>console.warn("讀取居家資料失敗",e));
+  }
+}
+function setSyncBadge(state){
+  const el=document.getElementById("syncBadge"); if(!el) return;
+  const map={loading:"☁️ 同步中…",ok:"☁️ 已同步",err:"⚠️ 同步異常",local:"📵 本機模式"};
+  el.textContent=map[state]||""; el.className="sync-badge "+state;
+}
+
+/* ===== render dispatcher ===== */
+function render(){
+  const fab=document.getElementById("fab");
+  fab.style.display="block";
+  if(view==="trip"){
+    fab.textContent = tripNav==="detail" ? "＋ 新增城市" : "＋ 新增旅程";
+  }else{
+    fab.textContent = view==="memo" ? "＋ 寫一則回憶"
+                    : view==="pack" ? "＋ 新增物品"
+                    : "＋ 記一筆";
+  }
+  if(view==="trip"){ tripNav==="detail" ? renderTripDetail() : renderTripList(); }
+  else if(view==="budget") renderBudget();
+  else if(view==="pack") renderPack();
+  else renderMemo();
+}
+
+/* ----- 模擬行程：旅程列表 ----- */
+function renderTripList(){
+  const main=document.getElementById("main");
+  let html=`<div class="countLine">共 ${trips.length} 趟旅程</div>`;
+  if(!trips.length){
+    html+=`<div class="empty"><div class="big">還沒有任何旅程</div>按下方「＋ 新增旅程」開一趟新的，輸入出發、目的地和回程時間，就能在裡面做各種模擬安排。</div>`;
+  }else{
+    const list=trips.slice().sort((a,b)=>String(a.start||"").localeCompare(String(b.start||"")));
+    html+=list.map(t=>{
+      const planN=(t.plans||[]).length;
+      return `<div class="card" data-id="${t.id}" data-act="tripopen">
+        <div class="row">
+          <div style="flex:1">
+            <div class="title">📍 ${esc(t.dest||"(未命名旅程)")}</div>
+            <div class="meta">${fmtDT(t.start)} → ${fmtDT(t.end)}</div>
+            <div style="margin-top:6px">
+              <span class="tag">${planN} 個城市</span>
+              ${tripDays(t)?`<span class="tag sun">${tripDays(t)}</span>`:""}
+            </div>
+          </div>
+          <div class="mini" style="align-self:center">›</div>
+        </div>
+      </div>`;
+    }).join("");
+  }
+  main.innerHTML=html;
+  main.querySelectorAll('[data-act="tripopen"]').forEach(c=>c.onclick=()=>{
+    openTripId=c.dataset.id; tripNav="detail"; render();
+  });
+}
+
+/* ----- 模擬行程：某趟旅程的方案 ----- */
+function renderTripDetail(){
+  const main=document.getElementById("main");
+  const t=trips.find(x=>x.id===openTripId);
+  if(!t){ tripNav="list"; render(); return; }
+  if(!Array.isArray(t.plans)) t.plans=[];
+
+  let html=`<div class="card" style="background:var(--card2);border:none;margin-bottom:14px">
+      <div class="row"><div style="flex:1">
+        <div class="title">📍 ${esc(t.dest||"(未命名旅程)")}</div>
+        <div class="meta">${fmtDT(t.start)} → ${fmtDT(t.end)}${tripDays(t)?`　${tripDays(t)}`:""}</div>
+      </div></div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="chip" data-edittrip="1">✎ 編輯旅程</button>
+        <button class="chip" data-backlist="1">‹ 返回列表</button>
+      </div>
+    </div>`;
+
+  html+=`<div class="countLine">這趟規劃了 ${t.plans.length} 個城市</div>`;
+  if(!t.plans.length){
+    html+=`<div class="empty"><div class="big">還沒有城市</div>按下方「＋ 新增城市」加入這趟要去的城市，例如「布拉格」「庫倫諾夫」，再分別安排交通、住宿、景點。或用下方的 AI 助手幫你排順序。</div>`;
+  }else{
+    html+=t.plans.map(p=>{
+      const items=p.items||[];
+      const byCat={}; items.forEach(it=>{(byCat[it.cat]=byCat[it.cat]||[]).push(it);});
+      const itemsHtml = items.length ? ITEM_CATS.filter(c=>byCat[c]).map(c=>
+        `<div style="margin-top:8px"><span class="tag ${c==='交通'||c==='住宿'?'':'sun'}">${c}</span>
+          ${byCat[c].map(it=>`<div class="mini" style="margin:4px 0 0 4px;display:flex;gap:6px;align-items:center">
+            <span data-itemtog="${it.id}" data-plan="${p.id}" class="ckbox" style="width:18px;height:18px;font-size:11px;${it.done?'background:var(--sky)':''}">${it.done?'✓':''}</span>
+            <span class="${it.done?'done':''}" data-itemedit="${it.id}" data-plan="${p.id}" style="flex:1">${esc(it.name)}${it.note?` — ${esc(it.note)}`:""}</span>
+          </div>`).join("")}</div>`).join("")
+        : `<div class="mini" style="margin-top:6px;color:var(--soft)">還沒有項目，點「＋ 加項目」開始安排</div>`;
+      return `<div class="card">
+        <div class="row">
+          <div class="title" style="flex:1">🏙️ ${esc(p.name)}</div>
+          <button class="chip" data-planedit="${p.id}" style="padding:4px 10px">✎</button>
+        </div>
+        ${itemsHtml}
+        <button class="chip" data-additem="${p.id}" style="margin-top:12px;width:100%;border-style:dashed">＋ 加項目（交通／住宿／景點）</button>
+      </div>`;
+    }).join("");
+  }
+
+  // AI 助手區塊
+  const cityNames=(t.plans||[]).map(p=>p.name).join("、");
+  html+=`<div class="aibox">
+      <div class="aihead">🤖 AI 行程助手</div>
+      <div class="mini" style="margin-bottom:8px">輸入要去的城市（每行一個，或用逗號分隔），AI 會依這趟 ${tripDays(t)||"的天數"} 幫你排觀光順序、推薦景點，給 3 個方案。</div>
+      <textarea id="aiInput" placeholder="例：\n布拉格\n卡羅維瓦利\n庫倫諾夫">${esc(cityNames)}</textarea>
+      <button class="chip" id="aiGo" style="margin-top:10px;width:100%;background:var(--sky);color:#fff;border-color:var(--sky)">✨ 幫我規劃 3 個方案</button>
+      <div id="aiOut" class="aiout"></div>
+    </div>`;
+
+  main.innerHTML=html;
+  main.querySelector('[data-backlist]').onclick=()=>{ tripNav="list"; openTripId=null; render(); };
+  main.querySelector('[data-edittrip]').onclick=()=>openTrip(t.id);
+  main.querySelectorAll('[data-planedit]').forEach(b=>b.onclick=()=>openPlan(t.id,b.dataset.planedit));
+  main.querySelectorAll('[data-additem]').forEach(b=>b.onclick=()=>openItem(t.id,b.dataset.additem));
+  main.querySelectorAll('[data-itemtog]').forEach(b=>b.onclick=()=>{
+    const p=t.plans.find(x=>x.id===b.dataset.plan); const it=p.items.find(x=>x.id===b.dataset.itemtog);
+    if(it){ it.done=!it.done; saveTrips(); render(); }
+  });
+  main.querySelectorAll('[data-itemedit]').forEach(b=>b.onclick=()=>openItem(t.id,b.dataset.plan,b.dataset.itemedit));
+  document.getElementById("aiGo").onclick=()=>askAI(t);
+}
+
+/* ===== Gemini AI 行程助手 ===== */
+async function askAI(t){
+  const out=document.getElementById("aiOut");
+  const raw=document.getElementById("aiInput").value.trim();
+  const cities=raw.split(/[\n,，、]/).map(s=>s.trim()).filter(Boolean);
+  if(!cities.length){ out.innerHTML=`<div class="mini" style="color:var(--err)">請先輸入至少一個城市</div>`; return; }
+  if(!GEMINI_API_KEY){
+    out.innerHTML=`<div class="mini" style="color:var(--err)">尚未設定 Gemini API Key。請到 aistudio.google.com/apikey 免費申請一組，貼到程式碼最上方的 GEMINI_API_KEY。</div>`;
+    return;
+  }
+  const days=tripDays(t)||"未指定天數";
+  const range=(t.start&&t.end)?`${fmtDT(t.start)} 到 ${fmtDT(t.end)}`:"時間未定";
+  out.innerHTML=`<div class="mini" style="color:var(--sky)">✨ AI 規劃中，請稍候…</div>`;
+  document.getElementById("aiGo").disabled=true;
+
+  const prompt=`你是專業的旅遊行程規劃師。我這趟旅程目的地是「${t.dest||"未定"}」，時間 ${range}，總共 ${days}。\n`+
+    `我想去這些城市：${cities.join("、")}。\n`+
+    `請依據天數，幫我規劃「3 個不同的觀光順序方案」。每個方案請包含：\n`+
+    `1. 方案名稱與整體特色（一句話）\n2. 城市造訪順序與各城市建議停留天數\n3. 每個城市推薦 2-3 個必看景點\n`+
+    `4. 城市間的交通建議\n請用繁體中文，條理清楚、精簡實用。`;
+
+  try{
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent`;
+    const res=await fetch(url,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","X-goog-api-key":GEMINI_API_KEY},
+      body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})
+    });
+    if(!res.ok){ const e=await res.text(); throw new Error("HTTP "+res.status+" "+e.slice(0,200)); }
+    const data=await res.json();
+    const text=data?.candidates?.[0]?.content?.parts?.map(p=>p.text).join("")||"（AI 沒有回傳內容）";
+    out.innerHTML=`<div class="airesult">${mdLite(text)}</div>
+      <div class="mini" style="margin-top:8px;color:var(--soft)">💡 看中哪個方案，可用上方「＋ 新增城市」把城市建出來，再到城市裡「＋ 加項目」填入景點。</div>`;
+  }catch(err){
+    out.innerHTML=`<div class="mini" style="color:var(--err)">AI 規劃失敗：${esc(String(err.message||err))}</div>`;
+  }finally{
+    const g=document.getElementById("aiGo"); if(g) g.disabled=false;
+  }
+}
+// 極簡 markdown→HTML（粗體、標題、清單、換行），已先 esc 防注入
+function mdLite(s){
+  let h=esc(s);
+  h=h.replace(/^#{1,6}\s*(.+)$/gm,'<b>$1</b>');
+  h=h.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+  h=h.replace(/^\s*[\*\-]\s+(.+)$/gm,'• $1');
+  h=h.replace(/\n/g,'<br>');
+  return h;
+}
+
+function tripDays(t){
+  if(!t.start||!t.end) return "";
+  const d=Math.round((new Date(t.end)-new Date(t.start))/86400000);
+  return d>0 ? `${d+1} 天 ${d} 夜` : "";
+}
+function fmtDT(s){
+  if(!s) return "未定";
+  const d=new Date(s); if(isNaN(d)) return esc(s);
+  const p=n=>String(n).padStart(2,"0");
+  return `${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/* ----- 記帳 ----- */
+function renderBudget(){
+  const main=document.getElementById("main");
+  const total=spends.reduce((s,x)=>s+Number(x.amt||0),0);
+  const byCat={}; spends.forEach(x=>byCat[x.cat]=(byCat[x.cat]||0)+Number(x.amt||0));
+
+  let html=`<div class="summary">
+      <div class="mini">旅程總花費</div>
+      <div class="big">${fmt(total)}</div>
+      ${CATS.filter(c=>byCat[c]).map(c=>`<div class="sumrow"><span>${c}</span><b>${fmt(byCat[c])}</b></div>`).join("")}
+    </div>`;
+
+  // 互讀居家 app 的預算當參考
+  if(homeData){
+    const hb=homeData.budget||{};
+    const inc=hb.income?Object.values(hb.income).reduce((s,v)=>s+Number(v||0),0):0;
+    const eff=hb.effort?Object.values(hb.effort).reduce((s,v)=>s+Number(v||0),0):0;
+    if(inc||eff){
+      html+=`<div class="linkcard">🏠 <b>居家 app 連動</b><br>
+        本季家庭月收入合計約 <b>${fmt(inc)}</b>${eff?`，已規劃支出 <b>${fmt(eff)}</b>`:""}。
+        <span class="mini">（唯讀，來自居家 app）</span></div>`;
+    }
+  }
+
+  html+=`<div class="countLine">共 ${spends.length} 筆花費</div>`;
+  if(!spends.length){
+    html+=`<div class="empty"><div class="big">還沒有任何花費</div>邊玩邊記，回來就有完整的旅遊帳本。</div>`;
+  }else{
+    const list=spends.slice().sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
+    html+=list.map(s=>`
+      <div class="card" data-id="${s.id}" data-act="spend">
+        <div class="row">
+          <div style="flex:1">
+            <div class="title">${esc(s.name)}</div>
+            <div class="meta">${esc(s.date||"")}　<span class="tag sun">${esc(s.cat)}</span></div>
+          </div>
+          <div class="amt">${fmt(s.amt)}</div>
+        </div>
+      </div>`).join("");
+  }
+  main.innerHTML=html;
+  main.querySelectorAll('[data-act="spend"]').forEach(c=>c.onclick=()=>openSpend(c.dataset.id));
+}
+
+/* ----- 打包 ----- */
+function renderPack(){
+  const main=document.getElementById("main");
+  const cats=["全部",...PACK_CATS.filter(c=>packs.some(p=>p.cat===c))];
+  let html=`<div class="chip-row">${cats.map(c=>
+    `<button class="chip ${c===packCatFilter?'on':''}" data-cat="${c}">${c}</button>`).join("")}</div>`;
+
+  let list = packCatFilter==="全部" ? packs.slice() : packs.filter(p=>p.cat===packCatFilter);
+  const done=packs.filter(p=>p.done).length;
+  html+=`<div class="countLine">已打包 ${done}／${packs.length} 件</div>`;
+
+  if(!list.length){
+    html+=`<div class="empty"><div class="big">打包清單是空的</div>把要帶的東西列出來，出發前一件件勾掉。</div>`;
+  }else{
+    list.sort((a,b)=>(a.done-b.done));
+    html+=list.map(p=>`
+      <div class="card" data-id="${p.id}" data-act="pack" style="padding:11px 14px">
+        <div class="row" style="align-items:center">
+          <div class="ckbox ${p.done?'on':''}" data-tog="${p.id}">${p.done?'✓':''}</div>
+          <div style="flex:1" class="title ${p.done?'done':''}" style="font-size:15px">${esc(p.name)}</div>
+          <span class="tag">${esc(p.cat)}</span>
+        </div>
+      </div>`).join("");
+  }
+  main.innerHTML=html;
+  main.querySelectorAll(".chip").forEach(c=>c.onclick=()=>{packCatFilter=c.dataset.cat;render();});
+  main.querySelectorAll("[data-tog]").forEach(b=>b.onclick=e=>{
+    e.stopPropagation();
+    const p=packs.find(x=>x.id===b.dataset.tog); if(p){p.done=!p.done;savePacks();render();}
+  });
+  main.querySelectorAll('[data-act="pack"]').forEach(c=>c.onclick=e=>{
+    if(e.target.dataset.tog) return; openPack(c.dataset.id);
+  });
+}
+
+/* ----- 回憶 ----- */
+function renderMemo(){
+  const main=document.getElementById("main");
+  let html=`<div class="countLine">共 ${memos.length} 則回憶</div>`;
+  if(!memos.length){
+    html+=`<div class="empty"><div class="big">還沒有回憶筆記</div>記下今天的好吃好玩、心情和小發現。</div>`;
+  }else{
+    const list=memos.slice().sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
+    html+=list.map(m=>`
+      <div class="card" data-id="${m.id}" data-act="memo">
+        <div class="title">${esc(m.title||"(無標題)")}</div>
+        <div class="meta">${esc(m.date||"")}</div>
+        ${m.body?`<div class="mini" style="margin-top:7px;white-space:pre-wrap">${esc(m.body)}</div>`:""}
+      </div>`).join("");
+  }
+  main.innerHTML=html;
+  main.querySelectorAll('[data-act="memo"]').forEach(c=>c.onclick=()=>openMemo(c.dataset.id));
+}
+
+/* ===== 表單 sheet ===== */
+const mask=document.getElementById("mask"), sheet=document.getElementById("sheet");
+function openSheet(html){ sheet.innerHTML=html; mask.classList.add("on"); sheet.classList.add("on"); }
+function closeSheet(){ mask.classList.remove("on"); sheet.classList.remove("on"); }
+mask.onclick=closeSheet;
+
+/* 旅程表單 */
+function openTrip(id){
+  const t=id?trips.find(x=>x.id===id):{dest:"",start:"",end:""};
+  openSheet(`<h3>${id?"編輯旅程":"新增旅程"}</h3>
+    <label>目的地</label><input id="f_dest" value="${esc(t.dest)}" placeholder="例：京都">
+    <label>出發時間</label><input id="f_start" type="datetime-local" value="${esc(t.start||"")}">
+    <label>回程時間</label><input id="f_end" type="datetime-local" value="${esc(t.end||"")}">
+    <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
+      <button class="save" onclick="saveTrip('${id||""}')">儲存</button></div>
+    ${id?`<button class="del" onclick="delTrip('${id}')">刪除整趟旅程</button>`:""}`);
+}
+function saveTrip(id){
+  const dest=document.getElementById("f_dest").value.trim(); if(!dest){alert("請輸入目的地");return;}
+  const o={dest,start:document.getElementById("f_start").value,end:document.getElementById("f_end").value};
+  if(id){ Object.assign(trips.find(x=>x.id===id),o); }
+  else{ const nt={id:uid(),plans:[],...o}; trips.push(nt); }
+  saveTrips(); closeSheet(); render();
+}
+function delTrip(id){
+  if(!confirm("確定刪除整趟旅程（含所有城市）？")) return;
+  trips=trips.filter(x=>x.id!==id); saveTrips(); closeSheet();
+  tripNav="list"; openTripId=null; render();
+}
+
+/* 城市表單 */
+function openPlan(tripId,planId){
+  const t=trips.find(x=>x.id===tripId);
+  const p=planId?(t.plans||[]).find(x=>x.id===planId):{name:""};
+  openSheet(`<h3>${planId?"編輯城市":"新增城市"}</h3>
+    <label>城市名稱</label><input id="f_pname" value="${esc(p.name)}" placeholder="例：布拉格">
+    <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
+      <button class="save" onclick="savePlan('${tripId}','${planId||""}')">儲存</button></div>
+    ${planId?`<button class="del" onclick="delPlan('${tripId}','${planId}')">刪除這個城市</button>`:""}`);
+}
+function savePlan(tripId,planId){
+  const t=trips.find(x=>x.id===tripId); if(!Array.isArray(t.plans)) t.plans=[];
+  const name=document.getElementById("f_pname").value.trim(); if(!name){alert("請輸入城市名稱");return;}
+  if(planId){ Object.assign(t.plans.find(x=>x.id===planId),{name}); }
+  else{ t.plans.push({id:uid(),name,items:[]}); }
+  saveTrips(); closeSheet(); render();
+}
+function delPlan(tripId,planId){
+  const t=trips.find(x=>x.id===tripId);
+  t.plans=(t.plans||[]).filter(x=>x.id!==planId); saveTrips(); closeSheet(); render();
+}
+
+/* 城市內項目表單 */
+let itemCat="景點";
+function openItem(tripId,planId,itemId){
+  const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
+  const it=itemId?(p.items||[]).find(x=>x.id===itemId):{cat:"景點",name:"",note:""};
+  itemCat=it.cat;
+  openSheet(`<h3>${itemId?"編輯項目":"加項目"}</h3>
+    <label>分類</label>
+    <div class="chip-row" id="icatpick">${ITEM_CATS.map(c=>`<button class="chip ${c===itemCat?'on':''}" data-c="${c}">${c}</button>`).join("")}</div>
+    <label>名稱</label><input id="f_iname" value="${esc(it.name)}" placeholder="例：搭新幹線／住四条飯店／清水寺">
+    <label>備註</label><textarea id="f_inote" placeholder="時間、價格、訂房連結、注意事項…">${esc(it.note||"")}</textarea>
+    <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
+      <button class="save" onclick="saveItem('${tripId}','${planId}','${itemId||""}')">儲存</button></div>
+    ${itemId?`<button class="del" onclick="delItem('${tripId}','${planId}','${itemId}')">刪除這個項目</button>`:""}`);
+  document.querySelectorAll("#icatpick .chip").forEach(b=>b.onclick=()=>{
+    itemCat=b.dataset.c; document.querySelectorAll("#icatpick .chip").forEach(x=>x.classList.toggle("on",x===b));
+  });
+}
+function saveItem(tripId,planId,itemId){
+  const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
+  if(!Array.isArray(p.items)) p.items=[];
+  const name=document.getElementById("f_iname").value.trim(); if(!name){alert("請輸入名稱");return;}
+  const o={cat:itemCat,name,note:document.getElementById("f_inote").value.trim()};
+  if(itemId){ Object.assign(p.items.find(x=>x.id===itemId),o); }
+  else{ p.items.push({id:uid(),done:false,...o}); }
+  saveTrips(); closeSheet(); render();
+}
+function delItem(tripId,planId,itemId){
+  const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
+  p.items=(p.items||[]).filter(x=>x.id!==itemId); saveTrips(); closeSheet(); render();
+}
+
+let spendCat="餐飲";
+function openSpend(id){
+  const s=id?spends.find(x=>x.id===id):{date:today(),cat:"餐飲",name:"",amt:""};
+  spendCat=s.cat;
+  openSheet(`<h3>${id?"編輯花費":"記一筆"}</h3>
+    <label>項目</label><input id="f_name" value="${esc(s.name)}" placeholder="例：午餐 拉麵">
+    <div style="display:flex;gap:10px">
+      <div style="flex:1"><label>金額</label><input id="f_amt" type="number" inputmode="numeric" value="${s.amt||""}" placeholder="0"></div>
+      <div style="flex:1"><label>日期</label><input id="f_date" type="date" value="${s.date||today()}"></div>
+    </div>
+    <label>分類</label>
+    <div class="chip-row" id="catpick">${CATS.map(c=>`<button class="chip ${c===spendCat?'on':''}" data-c="${c}">${c}</button>`).join("")}</div>
+    <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
+      <button class="save" onclick="saveSpend('${id||""}')">儲存</button></div>
+    ${id?`<button class="del" onclick="delSpend('${id}')">刪除這筆</button>`:""}`);
+  document.querySelectorAll("#catpick .chip").forEach(b=>b.onclick=()=>{
+    spendCat=b.dataset.c; document.querySelectorAll("#catpick .chip").forEach(x=>x.classList.toggle("on",x===b));
+  });
+}
+function saveSpend(id){
+  const name=document.getElementById("f_name").value.trim(); if(!name){alert("請輸入項目");return;}
+  const o={name,amt:Number(document.getElementById("f_amt").value)||0,
+    date:document.getElementById("f_date").value,cat:spendCat};
+  if(id){ Object.assign(spends.find(x=>x.id===id),o); }
+  else{ spends.push({id:uid(),...o}); }
+  saveSpends(); closeSheet(); render();
+}
+function delSpend(id){ spends=spends.filter(x=>x.id!==id); saveSpends(); closeSheet(); render(); }
+
+let packCat="衣物";
+function openPack(id){
+  const p=id?packs.find(x=>x.id===id):{cat:"衣物",name:""};
+  packCat=p.cat;
+  openSheet(`<h3>${id?"編輯物品":"新增物品"}</h3>
+    <label>物品名稱</label><input id="f_name" value="${esc(p.name)}" placeholder="例：護照、充電線">
+    <label>分類</label>
+    <div class="chip-row" id="pcatpick">${PACK_CATS.map(c=>`<button class="chip ${c===packCat?'on':''}" data-c="${c}">${c}</button>`).join("")}</div>
+    <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
+      <button class="save" onclick="savePack('${id||""}')">儲存</button></div>
+    ${id?`<button class="del" onclick="delPack('${id}')">刪除</button>`:""}`);
+  document.querySelectorAll("#pcatpick .chip").forEach(b=>b.onclick=()=>{
+    packCat=b.dataset.c; document.querySelectorAll("#pcatpick .chip").forEach(x=>x.classList.toggle("on",x===b));
+  });
+}
+function savePack(id){
+  const name=document.getElementById("f_name").value.trim(); if(!name){alert("請輸入名稱");return;}
+  if(id){ Object.assign(packs.find(x=>x.id===id),{name,cat:packCat}); }
+  else{ packs.push({id:uid(),name,cat:packCat,done:false}); }
+  savePacks(); closeSheet(); render();
+}
+function delPack(id){ packs=packs.filter(x=>x.id!==id); savePacks(); closeSheet(); render(); }
+
+function openMemo(id){
+  const m=id?memos.find(x=>x.id===id):{date:today(),title:"",body:""};
+  openSheet(`<h3>${id?"編輯回憶":"寫一則回憶"}</h3>
+    <label>標題</label><input id="f_title" value="${esc(m.title)}" placeholder="例：在京都的第一天">
+    <label>日期</label><input id="f_date" type="date" value="${m.date||today()}">
+    <label>內容</label><textarea id="f_body" style="min-height:130px" placeholder="今天發生了什麼…">${esc(m.body)}</textarea>
+    <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
+      <button class="save" onclick="saveMemo('${id||""}')">儲存</button></div>
+    ${id?`<button class="del" onclick="delMemo('${id}')">刪除這則</button>`:""}`);
+}
+function saveMemo(id){
+  const title=document.getElementById("f_title").value.trim();
+  const body=document.getElementById("f_body").value.trim();
+  if(!title&&!body){alert("請至少寫點什麼");return;}
+  const o={title,body,date:document.getElementById("f_date").value};
+  if(id){ Object.assign(memos.find(x=>x.id===id),o); }
+  else{ memos.push({id:uid(),...o}); }
+  saveMemos(); closeSheet(); render();
+}
+function delMemo(id){ memos=memos.filter(x=>x.id!==id); saveMemos(); closeSheet(); render(); }
+
+function today(){ const d=new Date(),p=n=>String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
+
+/* ===== 導覽 & 啟動 ===== */
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("on"));
+  t.classList.add("on"); view=t.dataset.view;
+  tripNav="list"; openTripId=null;
+  tripDayFilter="全部"; packCatFilter="全部"; render();
+});
+document.getElementById("fab").onclick=()=>{
+  if(view==="trip"){ tripNav==="detail" ? openPlan(openTripId) : openTrip(); }
+  else if(view==="budget") openSpend();
+  else if(view==="pack") openPack();
+  else openMemo();
+};
+
+render();
+cloudInit();
+</script>
+</body>
+</html>
