@@ -251,6 +251,10 @@
   .dayair{font-size:13px;color:var(--sun);font-weight:700;background:var(--sun-soft);border-radius:10px;padding:6px 10px;margin-bottom:6px;}
   .daycity{font-size:14px;font-weight:700;margin-bottom:6px;}
   .dayspots{font-size:13px;line-height:1.7;white-space:normal;}
+  .daycost{font-size:12px;color:var(--ok);font-weight:700;}
+  .costbox{background:var(--card);border:2px solid var(--sun);border-radius:18px;padding:16px;margin:14px 0;}
+  .costrow{display:flex;justify-content:space-between;padding:5px 0;font-size:15px;}
+  .costrow.total{border-top:2px solid var(--card2);margin-top:6px;padding-top:10px;font-weight:800;font-size:18px;color:var(--sun);}
   .spotchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
   .spotchip{background:var(--card);border:2px solid var(--line);border-radius:13px;padding:6px 11px;
     font-size:13px;color:var(--ink);font-weight:600;cursor:pointer;}
@@ -749,7 +753,7 @@ function renderSim(t){
       html+=`<div class="dayair">✈️ ${esc(d.airport)}</div>`;
     }
     // 當天所在城市 + 飯店
-    html+=`<div class="daycity">📍 ${esc(d.city)}${d.hotel?`　🛏️ ${esc(d.hotel)}`:""}</div>`;
+    html+=`<div class="daycity">📍 ${esc(d.city)}${d.hotel?`　🛏️ ${esc(d.hotel)}`:""}${d.hotelCost?`　<span class="daycost">💰 住宿 $${esc(d.hotelCost)}</span>`:""}</div>`;
     // 當天景點
     if(d.spots){
       html+=`<div class="dayspots">${mdLite(d.spots)}</div>`;
@@ -759,9 +763,94 @@ function renderSim(t){
     html+=`</div>`;
   });
 
+  // 金額總計（機票 + 住宿）
+  const costInfo=sumTripCost(t,decided);
+  if(costInfo.flight||costInfo.hotel){
+    html+=`<div class="costbox">
+        <div class="costrow"><span>✈️ 機票</span><span>$${costInfo.flight.toLocaleString()}</span></div>
+        <div class="costrow"><span>🛏️ 住宿合計</span><span>$${costInfo.hotel.toLocaleString()}</span></div>
+        <div class="costrow total"><span>總計</span><span>$${costInfo.total.toLocaleString()}</span></div>
+      </div>`;
+  }
+  // 分享按鈕
+  html+=`<button class="donebtn" id="shareTrip" style="background:var(--sky)">📤 產生完整行程，分享給旅伴</button>`;
+
   main.innerHTML=html;
   bindPhaseTabs(t);
   main.querySelector('[data-backlist]').onclick=()=>{ tripNav="list"; tripPhase="plan"; openTripId=null; render(); };
+  const shareBtn=document.getElementById("shareTrip");
+  if(shareBtn) shareBtn.onclick=()=>shareTripDoc(t,decided,days,costInfo);
+}
+
+/* 加總機票 + 住宿金額 */
+function sumTripCost(t,decided){
+  const flight = t.flight&&t.flight.cost ? Number(t.flight.cost)||0 : 0;
+  let hotel=0;
+  decided.legs.forEach(lg=>{ if(lg.hotel&&lg.hotel.cost) hotel+=Number(lg.hotel.cost)||0; });
+  return { flight, hotel, total:flight+hotel };
+}
+
+/* 產生完整行程 HTML 文件並分享/下載 */
+function shareTripDoc(t,decided,days,costInfo){
+  const esc2=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  let body=`<h1>${esc2(t.dest||"我的旅程")}</h1>
+    <p class="sub">${esc2(fmtTripRange(t))}　${esc2(tripDays(t)||"")}</p>`;
+  if(t.flight&&t.flight.airline) body+=`<p class="sub">✈️ ${esc2(t.flight.airline)}</p>`;
+
+  days.forEach(d=>{
+    body+=`<div class="day"><div class="dh">${esc2(d.dateLabel)} <span>${esc2(d.weekday)}</span></div>`;
+    if(d.move) body+=`<div class="mv">🚆 從 ${esc2(d.move.from)} → ${esc2(d.move.to)}${d.move.trans?`（${esc2(d.move.trans)}）`:""}${d.move.bk?` ${esc2(d.move.bk)}`:""}</div>`;
+    if(d.airport) body+=`<div class="air">✈️ ${esc2(d.airport)}</div>`;
+    body+=`<div class="ct">📍 ${esc2(d.city)}${d.hotel?`　🛏️ ${esc2(d.hotel)}`:""}${d.hotelCost?`　💰 住宿 $${esc2(d.hotelCost)}`:""}</div>`;
+    if(d.spots) body+=`<div class="sp">${esc2(d.spots).replace(/\n/g,"<br>")}</div>`;
+    body+=`</div>`;
+  });
+
+  if(costInfo.flight||costInfo.hotel){
+    body+=`<div class="cost">
+      <div class="cr"><span>✈️ 機票</span><span>$${costInfo.flight.toLocaleString()}</span></div>
+      <div class="cr"><span>🛏️ 住宿合計</span><span>$${costInfo.hotel.toLocaleString()}</span></div>
+      <div class="cr tot"><span>總計</span><span>$${costInfo.total.toLocaleString()}</span></div>
+    </div>`;
+  }
+
+  const doc=`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc2(t.dest||"我的旅程")} 行程</title>
+<style>
+  body{font-family:-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;background:#f4f7f9;color:#2b3a42;margin:0;padding:20px;line-height:1.6;}
+  .wrap{max-width:680px;margin:0 auto;}
+  h1{font-size:26px;margin:0 0 4px;color:#1f6f8b;}
+  .sub{color:#7a8a93;margin:2px 0;font-size:14px;}
+  .day{background:#fff;border-radius:16px;padding:16px;margin:14px 0;box-shadow:0 1px 6px rgba(0,0,0,.06);}
+  .dh{font-size:19px;font-weight:800;color:#1f6f8b;border-bottom:2px solid #eef3f5;padding-bottom:6px;margin-bottom:8px;}
+  .dh span{font-size:14px;color:#7a8a93;font-weight:500;}
+  .mv{background:#e8f4f8;color:#1f6f8b;border-radius:8px;padding:6px 10px;font-size:14px;font-weight:700;margin-bottom:6px;}
+  .air{background:#fdf2e3;color:#c47d2b;border-radius:8px;padding:6px 10px;font-size:14px;font-weight:700;margin-bottom:6px;}
+  .ct{font-weight:700;margin-bottom:6px;}
+  .sp{font-size:14px;color:#44555e;}
+  .cost{background:#fff;border-radius:16px;padding:16px;margin:14px 0;box-shadow:0 1px 6px rgba(0,0,0,.06);}
+  .cr{display:flex;justify-content:space-between;padding:5px 0;font-size:15px;}
+  .cr.tot{border-top:2px solid #eef3f5;margin-top:6px;padding-top:10px;font-weight:800;font-size:18px;color:#1f6f8b;}
+  .foot{text-align:center;color:#aab6bc;font-size:12px;margin-top:20px;}
+</style></head><body><div class="wrap">${body}
+<div class="foot">由旅遊規劃 App 產生</div></div></body></html>`;
+
+  // 用 Blob 產生檔案，優先用系統分享，否則開新分頁
+  const blob=new Blob([doc],{type:"text/html"});
+  const fname=`${(t.dest||"行程").replace(/\s/g,"")}_行程.html`;
+  const file=new File([blob],fname,{type:"text/html"});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    navigator.share({files:[file],title:(t.dest||"我的旅程")+" 行程"}).catch(()=>openDoc(blob));
+  } else {
+    openDoc(blob);
+  }
+}
+function openDoc(blob){
+  const url=URL.createObjectURL(blob);
+  window.open(url,"_blank");
+  // 也提供下載
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
 
 /* 把定案路線 + 景點規劃，攤平成逐日清單 */
@@ -773,7 +862,8 @@ function buildDailyPlan(t,decided,dts){
     const dt=dts[li];  // 可能為 null（沒設出發日期）
     const sp=(t.spots&&t.spots[lg.id])||{};
     const routeDays=splitRouteByDay(sp.route, lg.days||1);
-    const hotel = lg.hotel&&(lg.hotel.name||lg.hotel.addr) ? (lg.hotel.name||lg.hotel.addr) : "";
+    const hotel = lg.hotel&&lg.hotel.name ? lg.hotel.name : "";
+    const hotelCost = lg.hotel&&lg.hotel.cost ? lg.hotel.cost : "";
     const nights=Math.max(1,Number(lg.days)||1);
     for(let n=0;n<nights;n++){
       dayCounter++;
@@ -788,6 +878,7 @@ function buildDailyPlan(t,decided,dts){
       const dayObj={
         dateLabel, weekday,
         city:lg.city, hotel,
+        hotelCost: n===0?hotelCost:"",   // 只在該段第一晚顯示整段住宿總額
         spots:routeDays[n]||routeDays[0]||"",
         move:null, airport:null
       };
@@ -1367,6 +1458,7 @@ function openTrip(id){
     <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line)">
       <div style="font-weight:800;color:var(--sky-deep);font-size:14px">✈️ 航班資訊（選填，可之後再補）</div>
       <label>航空公司</label><input id="f_airline" value="${esc(f.airline||"")}" placeholder="例：長榮航空">
+      <label>機票價格（選填，整趟總額）</label><input id="f_fcost" type="number" inputmode="numeric" value="${esc(f.cost||"")}" placeholder="例：35000">
       <div style="font-size:13px;color:var(--soft);font-weight:700;margin:12px 0 4px">去程</div>
       <div style="display:flex;gap:10px">
         <div style="flex:1"><label style="margin-top:0">起飛</label><input id="f_dep_out" type="datetime-local" value="${esc(f.depOut||"")}"></div>
@@ -1387,6 +1479,7 @@ function saveTrip(id){
   const dest=document.getElementById("f_dest").value.trim(); if(!dest){alert("請輸入目的地");return;}
   const flight={
     airline:document.getElementById("f_airline").value.trim(),
+    cost:document.getElementById("f_fcost").value.trim(),
     depOut:document.getElementById("f_dep_out").value,
     arrOut:document.getElementById("f_arr_out").value,
     depBack:document.getElementById("f_dep_back").value,
@@ -1448,6 +1541,7 @@ function openHotel(tripId,planId,legId){
     <div class="chip-row" style="margin-bottom:14px">${platforms}</div>
     <label>飯店名稱</label><input id="f_hname" value="${esc(h.name||"")}" placeholder="例：布拉格洲際酒店">
     <label>地址</label><input id="f_haddr" value="${esc(h.addr||"")}" placeholder="貼上飯店地址，導航更精準">
+    <label>整段住宿總額（選填）</label><input id="f_hcost" type="number" inputmode="numeric" value="${esc(h.cost||"")}" placeholder="例：6000（這幾晚的總價）">
     <div class="mini" style="margin-top:6px;color:var(--soft)">填了地址後，交通導航會直接帶你到這間飯店。</div>
     <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
       <button class="save" onclick="saveHotel('${tripId}','${planId}','${legId}')">儲存</button></div>
@@ -1469,7 +1563,8 @@ function saveHotel(tripId,planId,legId){
   const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
   const lg=p.legs.find(x=>x.id===legId);
   lg.hotel={ name:document.getElementById("f_hname").value.trim(),
-    addr:document.getElementById("f_haddr").value.trim() };
+    addr:document.getElementById("f_haddr").value.trim(),
+    cost:document.getElementById("f_hcost").value.trim() };
   saveTrips(); closeSheet(); render();
 }
 function clearHotel(tripId,planId,legId){
