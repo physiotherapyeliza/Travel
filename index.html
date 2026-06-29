@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>旅遊手帳</title>
+<!--
+  使用說明（與居家 app 共用同一個 Firebase 專案）
+  1. 下面 FIREBASE_CONFIG 已填入與居家 app 相同的設定 → 自動共用同一個資料庫。
+  2. 旅遊資料存在 travel/{隱蔽碼}；居家資料在 home/{隱蔽碼}，兩邊可互讀。
+  3. 沒網路時自動只用本機儲存，照常可用。
+-->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+  // ▼▼▼ 與居家 app 相同的 Firebase 設定（共用同一專案才能互讀）▼▼▼
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyDu8fQdFy2nu31VHYhhrj-q93V-U69nlVE",
+    authDomain: "my-life-eba23.firebaseapp.com",
+    projectId: "my-life-eba23",
+    storageBucket: "my-life-eba23.firebasestorage.app",
+    messagingSenderId: "564889264526",
+    appId: "1:564889264526:web:ccb6ab2c3794b18a3484df"
+  };
+  // ▲▲▲▲▲
+
+  // ▼▼▼ Gemini AI 助手：金鑰存在手機本機，不寫進程式碼（第一次用會跳出來問）▼▼▼
+  // 申請金鑰：https://aistudio.google.com/apikey
+  function getGeminiKey(){ try{ return localStorage.getItem("gemini_key")||""; }catch(e){ return ""; } }
+  function setGeminiKey(k){ try{ localStorage.setItem("gemini_key",k); }catch(e){} }
+  // ▲▲▲▲▲
+
+  window.__db = null;
+  window.__hasFB = false;
+  try {
+    if (FIREBASE_CONFIG && FIREBASE_CONFIG.projectId) {
+      firebase.initializeApp(FIREBASE_CONFIG);
+      window.__db = firebase.firestore();
+      window.__hasFB = true;
+    }
+  } catch (e) {
+    console.warn("Firebase 初始化失敗，改用本機儲存", e);
+    window.__db = null; window.__hasFB = false;
+  }
+</script>
+
+<style>
+  :root{
+    /* 旅行天空色 — 與居家綠植色系區隔，但同樣柔和自然 */
+    --paper:#f3f6f8;       /* 淺天藍灰底 */
+    --ink:#33424d;         /* 深藍灰 文字 */
+    --soft:#86949e;        /* 灰藍 次要文字 */
+    --line:#dde6ea;        /* 淺分隔線 */
+    --card:#ffffff;        /* 白卡片 */
+    --card2:#e9f1f5;       /* 淺水藍 區塊底 */
+    --sky:#5b94b8;         /* 天藍 主色 */
+    --sky-deep:#427494;    /* 深天藍 */
+    --sky-soft:#d6e7f0;    /* 淡天藍 標籤底 */
+    --sun:#e2a45c;         /* 暖陽橘 次要 */
+    --sun-soft:#f6e3cd;    /* 淡橘 */
+    --coral:#dd7a6a;       /* 珊瑚 強調 */
+    --gold:#c89456;        /* 金額色 */
+    --ok:#5b9e7a; --err:#cf6b5b;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Microsoft JhengHei",sans-serif;
+    font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:560px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;}
+
+  header{padding:18px 16px 8px;}
+  .htop{display:flex;align-items:center;justify-content:space-between;}
+  h1{font-size:21px;margin:0;font-weight:800;letter-spacing:.5px;}
+  .sync-badge{font-size:12px;padding:4px 10px;border-radius:12px;background:var(--card2);color:var(--soft);white-space:nowrap;}
+  .sync-badge.ok{color:var(--ok);} .sync-badge.err{color:var(--err);}
+  .sync-badge.loading{color:var(--sky);}
+
+  .tabs{display:flex;gap:6px;padding:10px 16px 4px;flex-wrap:wrap;}
+  .tab{flex:1;min-width:72px;text-align:center;padding:9px 0;border:2px solid var(--line);border-radius:16px;
+    background:var(--card);color:var(--soft);font-size:13px;font-weight:700;cursor:pointer;transition:.15s;}
+  .tab.on{background:var(--sky);color:#fff;border-color:var(--sky);}
+
+  main{flex:1;padding:8px 16px 96px;overflow-y:auto;}
+  .countLine{font-size:13px;color:var(--soft);margin:6px 2px 12px;}
+
+  .card{background:var(--card);border:2px solid var(--line);border-radius:18px;padding:14px;margin-bottom:12px;}
+  .card .row{display:flex;align-items:flex-start;gap:10px;}
+  .card .title{font-weight:700;font-size:16px;flex:1;}
+  .card .meta{font-size:13px;color:var(--soft);margin-top:3px;}
+  .card .amt{color:var(--gold);font-weight:800;white-space:nowrap;}
+  .tag{display:inline-block;background:var(--sky-soft);color:var(--sky-deep);font-size:12px;
+    padding:2px 9px;border-radius:10px;margin:4px 4px 0 0;font-weight:700;}
+  .tag.sun{background:var(--sun-soft);color:#a96a26;}
+  .mini{font-size:12px;color:var(--soft);}
+  .done{opacity:.5;text-decoration:line-through;}
+
+  .empty{text-align:center;color:var(--soft);padding:48px 16px;}
+  .empty .big{font-size:17px;font-weight:700;color:var(--ink);margin-bottom:6px;}
+
+  .chip-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
+  .chip{padding:6px 12px;border:2px solid var(--line);border-radius:14px;background:var(--card);
+    color:var(--soft);font-size:13px;font-weight:700;cursor:pointer;}
+  .chip.on{background:var(--sky-soft);border-color:var(--sky);color:var(--sky-deep);}
+
+  .ckbox{width:24px;height:24px;border:2px solid var(--sky);border-radius:8px;flex-shrink:0;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff;background:var(--card);}
+  .ckbox.on{background:var(--sky);}
+
+  .summary{background:var(--card2);border-radius:16px;padding:14px;margin-bottom:14px;}
+  .summary .big{font-size:24px;font-weight:800;color:var(--sky-deep);}
+  .sumrow{display:flex;justify-content:space-between;padding:4px 0;font-size:14px;}
+  .sumrow b{color:var(--gold);}
+
+  .linkcard{background:linear-gradient(135deg,var(--sky-soft),var(--card2));border:2px solid var(--line);
+    border-radius:16px;padding:13px 14px;margin-bottom:14px;font-size:13px;}
+  .linkcard b{color:var(--sky-deep);}
+
+  .fab{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);max-width:528px;width:calc(100% - 32px);
+    background:var(--sky);color:#fff;border:none;border-radius:18px;padding:15px;font-size:16px;font-weight:800;
+    box-shadow:0 6px 20px rgba(66,116,148,.35);cursor:pointer;z-index:30;}
+
+  .mask{position:fixed;inset:0;background:rgba(40,55,65,.45);z-index:40;display:none;}
+  .mask.on{display:block;}
+  .sheet{position:fixed;left:0;right:0;bottom:0;background:var(--paper);z-index:50;border-radius:22px 22px 0 0;
+    padding:20px 18px calc(20px + env(safe-area-inset-bottom));max-width:560px;margin:0 auto;
+    transform:translateY(100%);transition:.25s;max-height:90vh;overflow-y:auto;}
+  .sheet.on{transform:translateY(0);}
+  .sheet h3{margin:0 0 14px;font-size:18px;}
+  label{display:block;font-size:13px;color:var(--soft);font-weight:700;margin:12px 0 5px;}
+  input,select,textarea{width:100%;border:2px solid var(--line);border-radius:13px;padding:11px;font-size:15px;
+    background:var(--card);color:var(--ink);font-family:inherit;}
+  textarea{resize:vertical;min-height:70px;}
+  .seg{display:flex;gap:6px;}
+  .seg button{flex:1;padding:10px;border:2px solid var(--line);border-radius:13px;background:var(--card);
+    color:var(--soft);font-weight:700;cursor:pointer;font-size:14px;}
+  .seg button.on{background:var(--sky);color:#fff;border-color:var(--sky);}
+  .btns{display:flex;gap:10px;margin-top:18px;}
+  .btns button{flex:1;padding:13px;border-radius:14px;font-size:16px;font-weight:800;cursor:pointer;border:2px solid var(--line);}
+  .btns .save{background:var(--sky);color:#fff;border-color:var(--sky);}
+  .btns .cancel{background:var(--card);color:var(--soft);}
+  .del{width:100%;margin-top:10px;padding:12px;border-radius:14px;border:2px solid var(--err);
+    background:var(--card);color:var(--err);font-weight:800;font-size:15px;cursor:pointer;}
+
+  .aibox{background:var(--card);border:2px dashed var(--sky);border-radius:18px;padding:14px;margin-bottom:12px;}
+
+  .wishbox{background:var(--card);border:2px solid var(--sky);border-radius:18px;padding:14px;margin-bottom:12px;}
+  .wishchips{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+  .wishchip{display:inline-flex;align-items:center;gap:4px;background:var(--sky-soft);color:var(--sky-deep);
+    border-radius:14px;padding:6px 10px;font-size:14px;font-weight:700;}
+  .wishchip button{border:none;background:none;color:var(--sky-deep);font-size:13px;cursor:pointer;padding:0;opacity:.6;}
+  .wishadd{border:2px dashed var(--sky);background:var(--card);color:var(--sky-deep);border-radius:14px;
+    padding:6px 12px;font-size:13px;font-weight:700;cursor:pointer;}
+  .aihead{font-weight:800;font-size:16px;color:var(--sky-deep);margin-bottom:6px;}
+  .aiout{margin-top:10px;}
+  .airesult{background:var(--card2);border-radius:14px;padding:13px;font-size:14px;line-height:1.7;
+    white-space:normal;word-break:break-word;}
+  .airesult b{color:var(--sky-deep);}
+
+  .aiplan{background:var(--card2);border-radius:14px;padding:12px;margin-top:10px;}
+  .aiplan-h{font-weight:800;color:var(--sky-deep);font-size:15px;margin-bottom:4px;}
+
+  /* 定案路線圖 */
+  .routebox{background:linear-gradient(135deg,var(--sun-soft),var(--card2));border:2px solid var(--sun);
+    border-radius:18px;padding:16px;margin-bottom:14px;}
+  .routestop{display:flex;align-items:center;gap:10px;}
+  .routedot{font-size:22px;}
+  .routecity{font-size:15px;}
+  .routestep{font-size:18px;margin:2px 0 2px 4px;opacity:.7;}
+  .flytag{background:var(--sky);color:#fff;font-size:11px;padding:2px 8px;border-radius:9px;margin-left:6px;font-weight:700;}
+
+  /* 方案橫向滑動 */
+  .planscroll{display:flex;gap:12px;overflow-x:auto;padding:4px 2px 12px;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;}
+  .plancard{flex:0 0 80%;max-width:80%;scroll-snap-align:center;background:var(--card);
+    border:2px solid var(--line);border-radius:18px;padding:14px;}
+  .plancard.decided{border-color:var(--sun);background:#fffaf3;}
+  .leg{display:flex;align-items:center;gap:6px;padding:5px 0;}
+  .leg+.footstep{margin-top:-2px;}
+  .legmove{display:flex;flex-direction:column;gap:1px;}
+  .legbtn{border:none;background:var(--card2);border-radius:6px;width:24px;height:18px;font-size:10px;
+    color:var(--sky-deep);cursor:pointer;padding:0;line-height:1;}
+  .legbtn:disabled{opacity:.3;cursor:default;}
+  .legcity{flex:1;font-size:14px;font-weight:600;}
+  .flymini{color:var(--sky);font-size:12px;}
+  .legdays{border:2px solid var(--line);background:var(--card);border-radius:10px;padding:3px 8px;
+    font-size:13px;font-weight:700;color:var(--sky-deep);cursor:pointer;white-space:nowrap;}
+  .legfly{border:none;background:none;font-size:14px;cursor:pointer;opacity:.55;padding:2px;}
+  .legdel{border:none;background:none;color:var(--err);font-size:14px;cursor:pointer;padding:2px;opacity:.6;}
+  .legdate{font-size:11px;color:var(--soft);font-weight:500;margin-top:1px;}
+  .flytag-edit{display:inline-block;background:var(--sky);color:#fff;font-size:11px;padding:2px 9px;
+    border-radius:9px;font-weight:700;cursor:pointer;}
+  .flytag-edit.hastrans{background:var(--sky-deep);}
+  .footstep{display:flex;justify-content:center;padding:2px 0;}
+  .footbtn{border:none;background:none;font-size:16px;cursor:pointer;opacity:.65;padding:2px 10px;border-radius:8px;}
+  .footbtn.hastrans{background:var(--card2);opacity:1;}
+  .routetrans{font-size:12px;color:var(--sky-deep);margin-top:3px;background:#f4fafd;border-radius:8px;padding:3px 8px;display:inline-block;}
+  .routetrans-inline{font-size:12px;color:var(--soft);font-weight:600;}
+  .routehotel{font-size:12px;color:var(--sun);margin-top:3px;cursor:pointer;font-weight:600;}
+  .routehotel.empty{color:var(--soft);font-weight:500;}
+  .routestop{cursor:pointer;}
+  .mapbtn{display:block;text-align:center;background:var(--sky);color:#fff;border-radius:13px;padding:11px;
+    font-size:15px;font-weight:800;text-decoration:none;margin-bottom:4px;}
+  .checkok{margin-top:10px;background:#e7f3ec;color:var(--ok);border-radius:10px;padding:8px 10px;font-size:13px;font-weight:700;}
+  .checkwarn{margin-top:10px;background:#fbeae7;color:var(--err);border-radius:10px;padding:8px 10px;font-size:13px;font-weight:700;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="htop">
+      <h1>✈️ 旅遊手帳</h1>
+      <span id="syncBadge" class="sync-badge"></span>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab on" data-view="trip">模擬行程</button>
+    <button class="tab" data-view="budget">記帳</button>
+    <button class="tab" data-view="pack">打包</button>
+    <button class="tab" data-view="memo">回憶</button>
+  </div>
+
+  <main id="main"></main>
+
+  <button class="fab" id="fab">＋ 新增</button>
+</div>
+
+<div class="mask" id="mask"></div>
+<div class="sheet" id="sheet"></div>
+
+<script>
+/* ===== 本機儲存 key ===== */
+const T_KEY="travel_trip", B_KEY="travel_budget", P_KEY="travel_pack", M_KEY="travel_memo";
+
+let trips  = load(T_KEY,[]);   // 旅程 {id,dest,startDate,endDate,flight,decidedPlan, plans:[{id,name,legs:[{id,city,days,fly}]}]}
+let spends = load(B_KEY,[]);   // 花費 {id,date,cat,name,amt}
+let packs  = load(P_KEY,[]);   // 打包 {id,cat,name,done}
+let memos  = load(M_KEY,[]);   // 回憶 {id,date,title,body}
+
+let homeData = null;           // 從居家 app 讀來的快照（互讀）
+
+let view = "trip";
+let tripNav = "list";          // 模擬行程頁內部導覽：list=旅程列表 / detail=某趟旅程的方案
+let openTripId = null;         // 進入 detail 時的旅程 id
+let tripDayFilter = "全部";
+let packCatFilter = "全部";
+
+const CATS = ["交通","住宿","餐飲","門票","購物","其他"];
+const PACK_CATS = ["證件","衣物","盥洗","電子","藥品","其他"];
+
+function load(k,d){ try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d} }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function esc(s){return String(s??"").replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));}
+function fmt(n){ return "$"+Number(n||0).toLocaleString(); }
+
+function saveTrips(){ localStorage.setItem(T_KEY,JSON.stringify(trips)); cloudPush(); }
+function saveSpends(){ localStorage.setItem(B_KEY,JSON.stringify(spends)); cloudPush(); }
+function savePacks(){ localStorage.setItem(P_KEY,JSON.stringify(packs)); cloudPush(); }
+function saveMemos(){ localStorage.setItem(M_KEY,JSON.stringify(memos)); cloudPush(); }
+
+/* ===== Firebase 雲端同步（與居家 app 同機制） ===== */
+// 旅遊資料存 travel/{隱蔽碼}；居家在 home/{同一隱蔽碼}，兩邊互讀。
+// ⚠️ 這串隱蔽碼是共用鑰匙，請與居家 app 保持一致、勿外流。
+const SHARE_DOC = "b4c6706064bdd9f616d2fa2172590726";
+const cloudRef = window.__db ? window.__db.collection("travel").doc(SHARE_DOC) : null;
+const homeRef  = window.__db ? window.__db.collection("home").doc(SHARE_DOC)   : null;
+
+let cloudReady=false, cloudSkipPush=false, cloudTimer=null;
+
+function cloudPush(){
+  if(!cloudRef) return;
+  if(cloudSkipPush){ cloudSkipPush=false; return; }
+  if(!cloudReady) return;
+  clearTimeout(cloudTimer);
+  cloudTimer=setTimeout(()=>{
+    cloudRef.set({ trips, spends, packs, memos, updatedAt:Date.now() })
+      .then(()=>setSyncBadge("ok"))
+      .catch(e=>{ console.warn("雲端儲存失敗",e); setSyncBadge("err"); });
+  },800);
+}
+function cloudInit(){
+  if(!cloudRef){ setSyncBadge("local"); return; }
+  setSyncBadge("loading");
+  cloudRef.onSnapshot(snap=>{
+    if(snap.exists){
+      const d=snap.data();
+      cloudSkipPush=true;
+      if(Array.isArray(d.trips))  trips=d.trips;
+      if(Array.isArray(d.spends)) spends=d.spends;
+      if(Array.isArray(d.packs))  packs=d.packs;
+      if(Array.isArray(d.memos))  memos=d.memos;
+      localStorage.setItem(T_KEY,JSON.stringify(trips));
+      localStorage.setItem(B_KEY,JSON.stringify(spends));
+      localStorage.setItem(P_KEY,JSON.stringify(packs));
+      localStorage.setItem(M_KEY,JSON.stringify(memos));
+      cloudReady=true; setSyncBadge("ok"); render();
+    }else{
+      cloudReady=true;
+      cloudRef.set({ trips, spends, packs, memos, updatedAt:Date.now() })
+        .then(()=>setSyncBadge("ok")).catch(()=>setSyncBadge("err"));
+    }
+  }, err=>{ console.warn("雲端讀取失敗",err); setSyncBadge("err"); cloudReady=false; });
+
+  // 互讀：監聽居家 app 的資料（唯讀，不回寫）
+  if(homeRef){
+    homeRef.onSnapshot(snap=>{
+      homeData = snap.exists ? snap.data() : null;
+      if(view==="budget") render();
+    }, e=>console.warn("讀取居家資料失敗",e));
+  }
+}
+function setSyncBadge(state){
+  const el=document.getElementById("syncBadge"); if(!el) return;
+  const map={loading:"☁️ 同步中…",ok:"☁️ 已同步",err:"⚠️ 同步異常",local:"📵 本機模式"};
+  el.textContent=map[state]||""; el.className="sync-badge "+state;
+}
+
+/* ===== render dispatcher ===== */
+function render(){
+  const fab=document.getElementById("fab");
+  fab.style.display="block";
+  if(view==="trip"){
+    fab.textContent = tripNav==="detail" ? "＋ 新增方案" : "＋ 新增旅程";
+  }else{
+    fab.textContent = view==="memo" ? "＋ 寫一則回憶"
+                    : view==="pack" ? "＋ 新增物品"
+                    : "＋ 記一筆";
+  }
+  if(view==="trip"){ tripNav==="detail" ? renderTripDetail() : renderTripList(); }
+  else if(view==="budget") renderBudget();
+  else if(view==="pack") renderPack();
+  else renderMemo();
+}
+
+/* ----- 模擬行程：旅程列表 ----- */
+function renderTripList(){
+  const main=document.getElementById("main");
+  let html=`<div class="countLine">共 ${trips.length} 趟旅程</div>`;
+  if(!trips.length){
+    html+=`<div class="empty"><div class="big">還沒有任何旅程</div>按下方「＋ 新增旅程」開一趟新的，輸入出發、目的地和回程時間，就能在裡面排不同走法、互相比較。</div>`;
+  }else{
+    const list=trips.slice().sort((a,b)=>String(a.start||"").localeCompare(String(b.start||"")));
+    html+=list.map(t=>{
+      const planN=(t.plans||[]).length;
+      return `<div class="card" data-id="${t.id}" data-act="tripopen">
+        <div class="row">
+          <div style="flex:1">
+            <div class="title">📍 ${esc(t.dest||"(未命名旅程)")}</div>
+            <div class="meta">${fmtTripRange(t)}</div>
+            <div style="margin-top:6px">
+              <span class="tag">${planN} 個方案</span>
+              ${tripDays(t)?`<span class="tag sun">${tripDays(t)}</span>`:""}
+            </div>
+          </div>
+          <div class="mini" style="align-self:center">›</div>
+        </div>
+      </div>`;
+    }).join("");
+  }
+  main.innerHTML=html;
+  main.querySelectorAll('[data-act="tripopen"]').forEach(c=>c.onclick=()=>{
+    openTripId=c.dataset.id; tripNav="detail"; render();
+  });
+}
+
+/* ----- 模擬行程：方案比較 + 定案路線 ----- */
+function renderTripDetail(){
+  const main=document.getElementById("main");
+  const t=trips.find(x=>x.id===openTripId);
+  if(!t){ tripNav="list"; render(); return; }
+  if(!Array.isArray(t.plans)) t.plans=[];
+  if(!Array.isArray(t.wishCities)) t.wishCities=[];
+
+  // 頂部：旅程資訊 + 返回
+  let html=`<div class="card" style="background:var(--card2);border:none;margin-bottom:14px">
+      <div class="row"><div style="flex:1">
+        <div class="title">📍 ${esc(t.dest||"(未命名旅程)")}</div>
+        <div class="meta">${fmtTripRange(t)}${tripDays(t)?`　${tripDays(t)}`:""}</div>
+        ${flightLine(t)}
+      </div></div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="chip" data-edittrip="1">✎ 編輯旅程</button>
+        <button class="chip" data-backlist="1">‹ 返回列表</button>
+      </div>
+    </div>`;
+
+  // 步驟一：想去的城市
+  html+=`<div class="wishbox">
+      <div class="aihead">🗺️ 想去的城市</div>
+      <div class="mini" style="margin-bottom:8px">先把這趟想去的城市列出來，再讓 AI 建議各城停留幾晚，最後排成方案。</div>
+      <div class="wishchips">
+        ${t.wishCities.length? t.wishCities.map(c=>`<span class="wishchip">${esc(c)}<button data-wishdel="${esc(c)}">✕</button></span>`).join("")
+          : `<span class="mini" style="color:var(--soft)">還沒有城市，按右邊「＋」加入</span>`}
+        <button class="wishadd" id="wishAdd">＋ 加城市</button>
+      </div>
+      <button class="chip" id="aiGo" ${t.wishCities.length?"":"disabled"} style="margin-top:12px;width:100%;background:var(--sky);color:#fff;border-color:var(--sky)${t.wishCities.length?"":";opacity:.5"}">🤖 AI 建議各城停留晚數</button>
+      <div style="text-align:right;margin-top:6px"><button class="chip" id="aiKey" style="font-size:12px;padding:4px 10px;border:none;background:none;color:var(--soft)">⚙️ 設定／更換金鑰</button></div>
+      <div id="aiOut" class="aiout"></div>
+    </div>`;
+
+  // 步驟三：方案比較（左右滑動）
+  html+=`<div class="countLine">${t.plans.length} 個方案，左右滑動比較</div>`;
+  if(!t.plans.length){
+    html+=`<div class="empty"><div class="big">還沒有方案</div>按下方「＋ 新增方案」排一種走法。加段時可從上面的城市清單點選。</div>`;
+  }else{
+    html+=`<div class="planscroll">`+t.plans.map(p=>planCardHTML(t,p)).join("")+`</div>`;
+  }
+
+  // 定案路線圖（編排完、選定方案後才在最下方生成）
+  const decided=t.plans.find(p=>p.id===t.decidedPlan);
+  if(decided && (decided.legs||[]).length){
+    const dts=computeLegDates(t,decided.legs);
+    html+=`<div class="routebox">
+        <div class="aihead" style="color:var(--sun);margin-bottom:10px">🧭 定案路線：${esc(decided.name)}</div>`;
+    decided.legs.forEach((lg,i)=>{
+      const fly = lg.fly==="in"?`<span class="flytag">入</span>`
+                : lg.fly==="out"?`<span class="flytag">出</span>`:"";
+      const dt=dts[i];
+      const dateStr = dt ? `${fmtMDObj(dt.start)}–${fmtMDObj(dt.end)}` : "";
+      const hotelInfo = lg.hotel&&(lg.hotel.name||lg.hotel.addr)
+        ? `<div class="routehotel">🏨 ${esc(lg.hotel.name||lg.hotel.addr)}</div>` : `<div class="routehotel empty">🏨 點此設定飯店</div>`;
+      html+=`<div class="routestop" data-hotel="${decided.id}|${lg.id}">
+          <div class="routedot">🏙️</div>
+          <div class="routecity"><b>${esc(lg.city)}</b> <span class="mini">${dateStr}（${lg.days||0}晚）</span> ${fly}
+            ${hotelInfo}
+            ${lg.fly&&transSummary(lg.airport)?`<div class="routetrans">✈️🚐 ${esc(transSummary(lg.airport))}</div>`:""}
+          </div>
+        </div>`;
+      if(i<decided.legs.length-1){
+        const tn=transSummary(lg.toNext);
+        html+=`<div class="routestep">👣${tn?` <span class="routetrans-inline">${esc(tn)}</span>`:""}</div>`;
+      }
+    });
+    // 回程航班吻合檢查
+    const last=lastDayOfPlan(t,decided.legs);
+    const back=t.flight&&t.flight.depBack?new Date(t.flight.depBack):null;
+    if(last&&back){
+      const sameDay = last.getFullYear()===back.getFullYear()&&last.getMonth()===back.getMonth()&&last.getDate()===back.getDate();
+      html+= sameDay
+        ? `<div class="checkok">✓ 最後退房 ${fmtMDObj(last)} 與回程班機 ${fmtMD(t.flight.depBack)} 同一天，剛好</div>`
+        : `<div class="checkwarn">⚠️ 最後退房是 ${fmtMDObj(last)}，但回程班機在 ${fmtMD(t.flight.depBack)}，請檢查晚數安排</div>`;
+    }
+    html+=`</div>`;
+  }
+
+  main.innerHTML=html;
+  // 還原方案卡橫向捲動位置（避免改入/出後跳回最左）
+  const ps=main.querySelector(".planscroll");
+  if(ps && window.__planScrollX!=null){ ps.scrollLeft=window.__planScrollX; }
+  if(ps){ ps.addEventListener("scroll",()=>{ window.__planScrollX=ps.scrollLeft; }); }
+  main.querySelector('[data-backlist]').onclick=()=>{ tripNav="list"; openTripId=null; window.__planScrollX=null; render(); };
+  main.querySelector('[data-edittrip]').onclick=()=>openTrip(t.id);
+  // 想去城市的事件
+  document.getElementById("wishAdd").onclick=()=>openWishAdd(t.id);
+  main.querySelectorAll('[data-wishdel]').forEach(b=>b.onclick=()=>{
+    t.wishCities=t.wishCities.filter(c=>c!==b.dataset.wishdel); saveTrips(); render();
+  });
+  bindPlanCardEvents(t);
+  main.querySelectorAll('[data-hotel]').forEach(b=>b.onclick=()=>{
+    const [pid,lid]=b.dataset.hotel.split("|");
+    openHotel(t.id,pid,lid);
+  });
+  document.getElementById("aiGo").onclick=()=>{ if(t.wishCities.length) askAI(t); };
+  document.getElementById("aiKey").onclick=()=>showKeyForm(t);
+}
+
+/* 交通資訊摘要（顯示在銜接點按鈕上） */
+function transSummary(tr){
+  if(!tr||(!tr.mode&&!tr.time&&!tr.cost)) return "";
+  let parts=[];
+  if(tr.mode) parts.push(tr.mode);
+  if(tr.time) parts.push(tr.time);
+  if(tr.cost) parts.push("$"+tr.cost);
+  return parts.join(" ・ ");
+}
+
+/* 單張方案卡 HTML */
+function planCardHTML(t,p){
+  const legs=p.legs||[];
+  const isDecided=p.id===t.decidedPlan;
+  const dts=computeLegDates(t,legs);
+  const legsHtml = legs.length ? legs.map((lg,i)=>{
+    const flyTxt = lg.fly==="in"?"入":lg.fly==="out"?"出":"";
+    const flyHasTrans = lg.fly && transSummary(lg.airport);
+    const flyTag = flyTxt
+      ? `<span class="flytag-edit ${flyHasTrans?'hastrans':''}" data-trans="${p.id}|${lg.id}|airport">${flyTxt}${flyHasTrans?' 🚐':''}</span>`
+      : "";
+    const dt=dts[i];
+    const dateStr = dt ? `${fmtMDObj(dt.start)}–${fmtMDObj(dt.end)}` : "";
+    let block=`<div class="leg">
+        <div class="legmove">
+          <button class="legbtn" data-up="${p.id}|${lg.id}" ${i===0?'disabled':''}>▲</button>
+          <button class="legbtn" data-down="${p.id}|${lg.id}" ${i===legs.length-1?'disabled':''}>▼</button>
+        </div>
+        <div class="legcity">${i+1}. ${esc(lg.city)} ${flyTag}
+          ${dateStr?`<div class="legdate">${dateStr}</div>`:""}
+        </div>
+        <button class="legdays" data-days="${p.id}|${lg.id}">${lg.days||0}晚</button>
+        <button class="legfly" data-fly="${p.id}|${lg.id}" title="標記搭飛機進/出">✈️</button>
+        <button class="legdel" data-legdel="${p.id}|${lg.id}">✕</button>
+      </div>`;
+    // 到下一城的腳印（點它填城市間交通；有填則加底色提示）
+    if(i<legs.length-1){
+      const hasT=transSummary(lg.toNext);
+      block+=`<div class="footstep"><button class="footbtn ${hasT?'hastrans':''}" data-trans="${p.id}|${lg.id}|toNext" title="城市間交通">👣${hasT?' 🚌':''}</button></div>`;
+    }
+    return block;
+  }).join("") : `<div class="mini" style="color:var(--soft);padding:8px 0">還沒有停留段</div>`;
+  const total=legs.reduce((s,l)=>s+(Number(l.days)||0),0);
+  return `<div class="plancard ${isDecided?'decided':''}">
+      <div class="row" style="align-items:center">
+        <div class="title" style="flex:1;font-size:15px">${isDecided?'⭐ ':''}${esc(p.name)}</div>
+        <button class="chip" data-planedit="${p.id}" style="padding:3px 8px">✎</button>
+      </div>
+      <div class="mini" style="margin:2px 0 8px">共 ${legs.length} 段 ・ ${total} 晚</div>
+      ${legsHtml}
+      <button class="chip" data-addleg="${p.id}" style="margin-top:8px;width:100%;border-style:dashed;font-size:13px">＋ 加一段</button>
+      <button class="chip ${isDecided?'':'decidebtn'}" data-decide="${p.id}" style="margin-top:8px;width:100%;${isDecided?'background:var(--sun);color:#fff;border-color:var(--sun)':'background:var(--sky-soft);color:var(--sky-deep);border-color:var(--sky)'}">${isDecided?'✓ 目前定案（再按取消）':'設為定案'}</button>
+    </div>`;
+}
+
+function bindPlanCardEvents(t){
+  const main=document.getElementById("main");
+  main.querySelectorAll('[data-planedit]').forEach(b=>b.onclick=()=>openPlan(t.id,b.dataset.planedit));
+  main.querySelectorAll('[data-addleg]').forEach(b=>b.onclick=()=>openLeg(t.id,b.dataset.addleg));
+  main.querySelectorAll('[data-decide]').forEach(b=>b.onclick=()=>{
+    t.decidedPlan = (t.decidedPlan===b.dataset.decide) ? null : b.dataset.decide;
+    saveTrips(); render();
+  });
+  main.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>moveLeg(t,b.dataset.up,-1));
+  main.querySelectorAll('[data-down]').forEach(b=>b.onclick=()=>moveLeg(t,b.dataset.down,1));
+  main.querySelectorAll('[data-trans]').forEach(b=>b.onclick=()=>{
+    const [pid,lid,kind]=b.dataset.trans.split("|");
+    openTrans(t.id,pid,lid,kind);
+  });
+  main.querySelectorAll('[data-days]').forEach(b=>b.onclick=()=>{
+    const [pid,lid]=b.dataset.days.split("|");
+    openLeg(t.id,pid,lid);
+  });
+  main.querySelectorAll('[data-fly]').forEach(b=>b.onclick=()=>{
+    const [pid,lid]=b.dataset.fly.split("|");
+    const p=t.plans.find(x=>x.id===pid); const lg=p.legs.find(x=>x.id===lid);
+    lg.fly = lg.fly==="in"?"out":lg.fly==="out"?null:"in"; // 循環：無→出發→返程→無
+    saveTrips(); render();
+  });
+  main.querySelectorAll('[data-legdel]').forEach(b=>b.onclick=()=>{
+    const [pid,lid]=b.dataset.legdel.split("|");
+    const p=t.plans.find(x=>x.id===pid);
+    p.legs=p.legs.filter(x=>x.id!==lid); saveTrips(); render();
+  });
+}
+function moveLeg(t,key,dir){
+  const [pid,lid]=key.split("|");
+  const p=t.plans.find(x=>x.id===pid);
+  const i=p.legs.findIndex(x=>x.id===lid); const j=i+dir;
+  if(j<0||j>=p.legs.length) return;
+  [p.legs[i],p.legs[j]]=[p.legs[j],p.legs[i]];
+  saveTrips(); render();
+}
+
+/* ===== Gemini AI 行程助手 ===== */
+/* 金鑰輸入框：第一次用 AI 或要更換金鑰時呼叫 */
+function showKeyForm(t){
+  const cur=getGeminiKey();
+  openSheet(`<h3>設定 Gemini 金鑰</h3>
+    <div class="mini" style="margin-bottom:8px">金鑰只會存在這支手機，不會上傳、不會公開。<br>還沒有金鑰？到 <b>aistudio.google.com/apikey</b> 免費申請。</div>
+    <label>API 金鑰</label>
+    <input id="f_key" value="${esc(cur)}" placeholder="貼上你的 Gemini 金鑰" autocomplete="off">
+    <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
+      <button class="save" onclick="saveKey('${t.id}')">儲存</button></div>
+    ${cur?`<button class="del" onclick="clearKey()">清除這支手機上的金鑰</button>`:""}`);
+}
+function saveKey(tripId){
+  const k=document.getElementById("f_key").value.trim();
+  if(!k){ alert("請貼上金鑰"); return; }
+  setGeminiKey(k); closeSheet();
+  const t=trips.find(x=>x.id===tripId);
+  if(t){ render(); }
+}
+function clearKey(){ setGeminiKey(""); try{localStorage.removeItem("gemini_key");}catch(e){} closeSheet(); render(); }
+
+/* ===== 測試模式：true 時不呼叫 Gemini，直接用下面的範例建議 ===== */
+const DEMO_MODE = true;   // 測試完改成 false 即可改用真正的 Gemini
+// 範例：各城市建議晚數 + 原因（依輸入城市動態對應，找不到就給預設）
+const DEMO_SUGGEST = {
+  "布拉格":{nights:3,reason:"舊城、城堡、查理大橋等景點密集，至少 3 晚才夠逛。"},
+  "卡羅維瓦利":{nights:1,reason:"溫泉小鎮，半天到一天可走完迴廊與觀景塔。"},
+  "庫倫諾夫":{nights:1,reason:"小巧的世界遺產古城，一天足以逛完城堡與老城。"},
+  "庫倫諾夫CK":{nights:1,reason:"小巧古城，一天可逛完。"}
+};
+
+async function askAI(t){
+  const out=document.getElementById("aiOut");
+  const cities=(t.wishCities||[]).slice();
+  if(!cities.length){ out.innerHTML=`<div class="mini" style="color:var(--err)">請先在上面加入想去的城市</div>`; return; }
+
+  // 測試模式：直接用範例建議
+  if(DEMO_MODE){
+    out.innerHTML=`<div class="mini" style="color:var(--sky)">✨ （測試模式）AI 建議中…</div>`;
+    setTimeout(()=>{
+      const sug=cities.map(c=>({
+        city:c,
+        nights:(DEMO_SUGGEST[c]&&DEMO_SUGGEST[c].nights)||2,
+        reason:(DEMO_SUGGEST[c]&&DEMO_SUGGEST[c].reason)||"建議停留 2 晚，可從容安排主要景點。"
+      }));
+      renderAISuggest(t,sug);
+    },300);
+    return;
+  }
+
+  let key=getGeminiKey();
+  if(!key){ showKeyForm(t); return; }
+  out.innerHTML=`<div class="mini" style="color:var(--sky)">✨ AI 建議中，請稍候…</div>`;
+  document.getElementById("aiGo").disabled=true;
+
+  const prompt=`你是專業的旅遊行程規劃師。我這趟去「${t.dest||"未定"}」，總共 ${tripDays(t)||"數天"}。\n`+
+    `我想去這些城市：${cities.join("、")}。\n`+
+    `請針對每個城市，建議適合停留幾晚，並用一句話說明原因（考慮景點數量、是否值得過夜）。\n`+
+    `必須只回傳 JSON（不要說明文字、不要 markdown），格式：\n`+
+    `{"suggest":[{"city":"城市名","nights":2,"reason":"原因"}]}\n`+
+    `城市名只用我給的：${cities.join("、")}。nights 是數字。全部用繁體中文。`;
+
+  try{
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent`;
+    const res=await fetch(url,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","X-goog-api-key":key},
+      body:JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{ responseMimeType:"application/json" } })
+    });
+    if(!res.ok){ const e=await res.text(); throw new Error("HTTP "+res.status+" "+e.slice(0,200)); }
+    const data=await res.json();
+    let text=data?.candidates?.[0]?.content?.parts?.map(p=>p.text).join("")||"";
+    let parsed=null;
+    try{ parsed=JSON.parse(text.replace(/```json|```/g,"").trim()); }catch(e){ parsed=null; }
+    if(parsed&&Array.isArray(parsed.suggest)){
+      renderAISuggest(t,parsed.suggest);
+    }else{
+      out.innerHTML=`<div class="airesult">${mdLite(text||"（AI 沒有回傳內容）")}</div>`;
+    }
+  }catch(err){
+    out.innerHTML=`<div class="mini" style="color:var(--err)">AI 建議失敗：${esc(String(err.message||err))}</div>`;
+  }finally{
+    const g=document.getElementById("aiGo"); if(g) g.disabled=false;
+  }
+}
+
+/* 顯示各城建議晚數 + 原因，並可一鍵生方案草稿 */
+function renderAISuggest(t,sug){
+  const out=document.getElementById("aiOut"); if(!out) return;
+  window.__aiSuggest=sug;
+  const total=sug.reduce((s,x)=>s+(Number(x.nights)||0),0);
+  let html=`<div class="aiplan"><div class="aiplan-h">🤖 建議停留晚數</div>`;
+  sug.forEach(x=>{
+    html+=`<div style="margin-top:8px">
+        <b>${esc(x.city)}　${x.nights} 晚</b>
+        <div class="mini" style="margin-top:1px">${esc(x.reason||"")}</div>
+      </div>`;
+  });
+  html+=`<div class="mini" style="margin-top:8px;color:var(--soft)">合計建議 ${total} 晚</div>
+      <button class="chip" id="genDraft" style="margin-top:10px;width:100%;background:var(--sky-soft);color:var(--sky-deep);border-color:var(--sky)">＋ 依建議生一個方案草稿</button>
+    </div>`;
+  out.innerHTML=html;
+  document.getElementById("genDraft").onclick=()=>{
+    if(!Array.isArray(t.plans)) t.plans=[];
+    const legs=sug.map((x,i)=>({
+      id:uid(), city:x.city, days:Math.max(1,Number(x.nights)||1),
+      fly: i===0?"in":(i===sug.length-1?"out":null)
+    }));
+    t.plans.push({ id:uid(), name:"AI 建議草稿", legs });
+    saveTrips(); render();
+  };
+}
+// 極簡 markdown→HTML（粗體、標題、清單、換行），已先 esc 防注入
+function mdLite(s){
+  let h=esc(s);
+  h=h.replace(/^#{1,6}\s*(.+)$/gm,'<b>$1</b>');
+  h=h.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+  h=h.replace(/^\s*[\*\-]\s+(.+)$/gm,'• $1');
+  h=h.replace(/\n/g,'<br>');
+  return h;
+}
+
+function tripDays(t){
+  if(!t.startDate||!t.endDate) return "";
+  const d=Math.round((new Date(t.endDate)-new Date(t.startDate))/86400000);
+  return d>=0 ? `${d+1} 天 ${d} 夜` : "";
+}
+// 旅程日期顯示（月/日）
+function fmtTripRange(t){
+  if(!t.startDate) return "日期未定";
+  const s=fmtMD(t.startDate);
+  const e=t.endDate?fmtMD(t.endDate):"?";
+  return `${s} – ${e}`;
+}
+function fmtMD(s){
+  if(!s) return "";
+  const d=new Date(s); if(isNaN(d)) return esc(s);
+  return `${d.getMonth()+1}/${d.getDate()}`;
+}
+// 航班摘要（頂部顯示）
+function flightLine(t){
+  const f=t.flight||{};
+  if(!f.airline && !f.depOut && !f.depBack) return "";
+  let parts=[];
+  if(f.airline) parts.push(esc(f.airline));
+  if(f.depOut) parts.push(`✈️入 ${fmtDT(f.depOut)}${f.arrOut?`→${fmtDT(f.arrOut)}`:""}`);
+  if(f.depBack) parts.push(`✈️出 ${fmtDT(f.depBack)}${f.arrBack?`→${fmtDT(f.arrBack)}`:""}`);
+  return `<div class="mini" style="margin-top:6px;color:var(--sky-deep)">${parts.join("　")}</div>`;
+}
+function fmtDT(s){
+  if(!s) return "未定";
+  const d=new Date(s); if(isNaN(d)) return esc(s);
+  const p=n=>String(n).padStart(2,"0");
+  return `${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+// 依出發日 + 各段晚數，推算每段的入住–退房日期（退房當天接下一城）
+function computeLegDates(t,legs){
+  const out=[];
+  if(!t.startDate){ return legs.map(()=>null); }
+  let cursor=new Date(t.startDate);
+  legs.forEach(lg=>{
+    const nights=Math.max(1,Number(lg.days)||1);
+    const checkin=new Date(cursor);
+    const checkout=new Date(cursor); checkout.setDate(checkout.getDate()+nights);
+    out.push({start:checkin,end:checkout,nights});
+    cursor=new Date(checkout); // 退房當天接下一段
+  });
+  return out;
+}
+function fmtMDObj(d){ return d? `${d.getMonth()+1}/${d.getDate()}` : ""; }
+// 推算方案最後一段的退房日，與回程航班日期比對
+function lastDayOfPlan(t,legs){
+  const dts=computeLegDates(t,legs);
+  const last=dts[dts.length-1];
+  return last? last.end : null;
+}
+
+/* ----- 記帳 ----- */
+function renderBudget(){
+  const main=document.getElementById("main");
+  const total=spends.reduce((s,x)=>s+Number(x.amt||0),0);
+  const byCat={}; spends.forEach(x=>byCat[x.cat]=(byCat[x.cat]||0)+Number(x.amt||0));
+
+  let html=`<div class="summary">
+      <div class="mini">旅程總花費</div>
+      <div class="big">${fmt(total)}</div>
+      ${CATS.filter(c=>byCat[c]).map(c=>`<div class="sumrow"><span>${c}</span><b>${fmt(byCat[c])}</b></div>`).join("")}
+    </div>`;
+
+  // 互讀居家 app 的預算當參考
+  if(homeData){
+    const hb=homeData.budget||{};
+    const inc=hb.income?Object.values(hb.income).reduce((s,v)=>s+Number(v||0),0):0;
+    const eff=hb.effort?Object.values(hb.effort).reduce((s,v)=>s+Number(v||0),0):0;
+    if(inc||eff){
+      html+=`<div class="linkcard">🏠 <b>居家 app 連動</b><br>
+        本季家庭月收入合計約 <b>${fmt(inc)}</b>${eff?`，已規劃支出 <b>${fmt(eff)}</b>`:""}。
+        <span class="mini">（唯讀，來自居家 app）</span></div>`;
+    }
+  }
+
+  html+=`<div class="countLine">共 ${spends.length} 筆花費</div>`;
+  if(!spends.length){
+    html+=`<div class="empty"><div class="big">還沒有任何花費</div>邊玩邊記，回來就有完整的旅遊帳本。</div>`;
+  }else{
+    const list=spends.slice().sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
+    html+=list.map(s=>`
+      <div class="card" data-id="${s.id}" data-act="spend">
+        <div class="row">
+          <div style="flex:1">
+            <div class="title">${esc(s.name)}</div>
+            <div class="meta">${esc(s.date||"")}　<span class="tag sun">${esc(s.cat)}</span></div>
+          </div>
+          <div class="amt">${fmt(s.amt)}</div>
+        </div>
+      </div>`).join("");
+  }
+  main.innerHTML=html;
+  main.querySelectorAll('[data-act="spend"]').forEach(c=>c.onclick=()=>openSpend(c.dataset.id));
+}
+
+/* ----- 打包 ----- */
+function renderPack(){
+  const main=document.getElementById("main");
+  const cats=["全部",...PACK_CATS.filter(c=>packs.some(p=>p.cat===c))];
+  let html=`<div class="chip-row">${cats.map(c=>
+    `<button class="chip ${c===packCatFilter?'on':''}" data-cat="${c}">${c}</button>`).join("")}</div>`;
+
+  let list = packCatFilter==="全部" ? packs.slice() : packs.filter(p=>p.cat===packCatFilter);
+  const done=packs.filter(p=>p.done).length;
+  html+=`<div class="countLine">已打包 ${done}／${packs.length} 件</div>`;
+
+  if(!list.length){
+    html+=`<div class="empty"><div class="big">打包清單是空的</div>把要帶的東西列出來，出發前一件件勾掉。</div>`;
+  }else{
+    list.sort((a,b)=>(a.done-b.done));
+    html+=list.map(p=>`
+      <div class="card" data-id="${p.id}" data-act="pack" style="padding:11px 14px">
+        <div class="row" style="align-items:center">
+          <div class="ckbox ${p.done?'on':''}" data-tog="${p.id}">${p.done?'✓':''}</div>
+          <div style="flex:1" class="title ${p.done?'done':''}" style="font-size:15px">${esc(p.name)}</div>
+          <span class="tag">${esc(p.cat)}</span>
+        </div>
+      </div>`).join("");
+  }
+  main.innerHTML=html;
+  main.querySelectorAll(".chip").forEach(c=>c.onclick=()=>{packCatFilter=c.dataset.cat;render();});
+  main.querySelectorAll("[data-tog]").forEach(b=>b.onclick=e=>{
+    e.stopPropagation();
+    const p=packs.find(x=>x.id===b.dataset.tog); if(p){p.done=!p.done;savePacks();render();}
+  });
+  main.querySelectorAll('[data-act="pack"]').forEach(c=>c.onclick=e=>{
+    if(e.target.dataset.tog) return; openPack(c.dataset.id);
+  });
+}
+
+/* ----- 回憶 ----- */
+function renderMemo(){
+  const main=document.getElementById("main");
+  let html=`<div class="countLine">共 ${memos.length} 則回憶</div>`;
+  if(!memos.length){
+    html+=`<div class="empty"><div class="big">還沒有回憶筆記</div>記下今天的好吃好玩、心情和小發現。</div>`;
+  }else{
+    const list=memos.slice().sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
+    html+=list.map(m=>`
+      <div class="card" data-id="${m.id}" data-act="memo">
+        <div class="title">${esc(m.title||"(無標題)")}</div>
+        <div class="meta">${esc(m.date||"")}</div>
+        ${m.body?`<div class="mini" style="margin-top:7px;white-space:pre-wrap">${esc(m.body)}</div>`:""}
+      </div>`).join("");
+  }
+  main.innerHTML=html;
+  main.querySelectorAll('[data-act="memo"]').forEach(c=>c.onclick=()=>openMemo(c.dataset.id));
+}
+
+/* ===== 表單 sheet ===== */
+const mask=document.getElementById("mask"), sheet=document.getElementById("sheet");
+function openSheet(html){ sheet.innerHTML=html; mask.classList.add("on"); sheet.classList.add("on"); }
+function closeSheet(){ mask.classList.remove("on"); sheet.classList.remove("on"); }
+mask.onclick=closeSheet;
+
+/* 加想去的城市（用 sheet，避免 prompt 在手機失效） */
+function openWishAdd(tripId){
+  openSheet(`<h3>加想去的城市</h3>
+    <label>城市名稱</label>
+    <input id="f_wish" placeholder="例：布拉格" autocomplete="off">
+    <div class="mini" style="margin-top:6px;color:var(--soft)">一次一個，可重複按「加城市」陸續加入。</div>
+    <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
+      <button class="save" onclick="saveWish('${tripId}')">加入</button></div>`);
+  setTimeout(()=>{ const el=document.getElementById("f_wish"); if(el) el.focus(); },100);
+}
+function saveWish(tripId){
+  const t=trips.find(x=>x.id===tripId); if(!t) return;
+  if(!Array.isArray(t.wishCities)) t.wishCities=[];
+  const c=document.getElementById("f_wish").value.trim();
+  if(!c){ alert("請輸入城市名稱"); return; }
+  if(!t.wishCities.includes(c)) t.wishCities.push(c);
+  saveTrips(); closeSheet(); render();
+}
+
+/* 旅程表單：日期區間 + 航班（選填） */
+function openTrip(id){
+  const t=id?trips.find(x=>x.id===id):{dest:"",startDate:"",endDate:"",flight:{}};
+  const f=t.flight||{};
+  openSheet(`<h3>${id?"編輯旅程":"新增旅程"}</h3>
+    <label>目的地</label><input id="f_dest" value="${esc(t.dest||"")}" placeholder="例：捷克">
+    <div style="display:flex;gap:10px">
+      <div style="flex:1"><label>出發日期</label><input id="f_sdate" type="date" value="${esc(t.startDate||"")}"></div>
+      <div style="flex:1"><label>回程日期</label><input id="f_edate" type="date" value="${esc(t.endDate||"")}"></div>
+    </div>
+
+    <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line)">
+      <div style="font-weight:800;color:var(--sky-deep);font-size:14px">✈️ 航班資訊（選填，可之後再補）</div>
+      <label>航空公司</label><input id="f_airline" value="${esc(f.airline||"")}" placeholder="例：長榮航空">
+      <div style="font-size:13px;color:var(--soft);font-weight:700;margin:12px 0 4px">去程</div>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1"><label style="margin-top:0">起飛</label><input id="f_dep_out" type="datetime-local" value="${esc(f.depOut||"")}"></div>
+        <div style="flex:1"><label style="margin-top:0">降落</label><input id="f_arr_out" type="datetime-local" value="${esc(f.arrOut||"")}"></div>
+      </div>
+      <div style="font-size:13px;color:var(--soft);font-weight:700;margin:12px 0 4px">回程</div>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1"><label style="margin-top:0">起飛</label><input id="f_dep_back" type="datetime-local" value="${esc(f.depBack||"")}"></div>
+        <div style="flex:1"><label style="margin-top:0">降落</label><input id="f_arr_back" type="datetime-local" value="${esc(f.arrBack||"")}"></div>
+      </div>
+    </div>
+
+    <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
+      <button class="save" onclick="saveTrip('${id||""}')">儲存</button></div>
+    ${id?`<button class="del" onclick="delTrip('${id}')">刪除整趟旅程</button>`:""}`);
+}
+function saveTrip(id){
+  const dest=document.getElementById("f_dest").value.trim(); if(!dest){alert("請輸入目的地");return;}
+  const flight={
+    airline:document.getElementById("f_airline").value.trim(),
+    depOut:document.getElementById("f_dep_out").value,
+    arrOut:document.getElementById("f_arr_out").value,
+    depBack:document.getElementById("f_dep_back").value,
+    arrBack:document.getElementById("f_arr_back").value
+  };
+  const o={dest,
+    startDate:document.getElementById("f_sdate").value,
+    endDate:document.getElementById("f_edate").value,
+    flight };
+  if(id){ Object.assign(trips.find(x=>x.id===id),o); }
+  else{ trips.push({id:uid(),plans:[],wishCities:[],decidedPlan:null,...o}); }
+  saveTrips(); closeSheet(); render();
+}
+function delTrip(id){
+  if(!confirm("確定刪除整趟旅程（含所有方案）？")) return;
+  trips=trips.filter(x=>x.id!==id); saveTrips(); closeSheet();
+  tripNav="list"; openTripId=null; render();
+}
+
+/* 方案表單（只有名稱） */
+function openPlan(tripId,planId){
+  const t=trips.find(x=>x.id===tripId);
+  const p=planId?(t.plans||[]).find(x=>x.id===planId):{name:""};
+  openSheet(`<h3>${planId?"編輯方案":"新增方案"}</h3>
+    <label>方案名稱</label><input id="f_pname" value="${esc(p.name)}" placeholder="例：走法A、樞紐折返版">
+    <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
+      <button class="save" onclick="savePlan('${tripId}','${planId||""}')">儲存</button></div>
+    ${planId?`<button class="del" onclick="delPlan('${tripId}','${planId}')">刪除這個方案</button>`:""}`);
+}
+function savePlan(tripId,planId){
+  const t=trips.find(x=>x.id===tripId); if(!Array.isArray(t.plans)) t.plans=[];
+  const name=document.getElementById("f_pname").value.trim(); if(!name){alert("請輸入方案名稱");return;}
+  if(planId){ Object.assign(t.plans.find(x=>x.id===planId),{name}); }
+  else{ t.plans.push({id:uid(),name,legs:[]}); }
+  saveTrips(); closeSheet(); render();
+}
+function delPlan(tripId,planId){
+  const t=trips.find(x=>x.id===tripId);
+  if(t.decidedPlan===planId) t.decidedPlan=null;
+  t.plans=(t.plans||[]).filter(x=>x.id!==planId); saveTrips(); closeSheet(); render();
+}
+
+/* 飯店表單（定案路線城市點選後編輯，存名稱+地址） */
+function openHotel(tripId,planId,legId){
+  const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
+  const lg=p.legs.find(x=>x.id===legId);
+  const h=lg.hotel||{name:"",addr:""};
+  openSheet(`<h3>🏨 ${esc(lg.city)} 的飯店</h3>
+    <label>飯店名稱</label><input id="f_hname" value="${esc(h.name||"")}" placeholder="例：布拉格洲際酒店">
+    <label>地址</label><input id="f_haddr" value="${esc(h.addr||"")}" placeholder="貼上飯店地址，導航更精準">
+    <div class="mini" style="margin-top:6px;color:var(--soft)">填了地址後，交通導航會直接帶你到這間飯店。</div>
+    <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
+      <button class="save" onclick="saveHotel('${tripId}','${planId}','${legId}')">儲存</button></div>
+    ${(h.name||h.addr)?`<button class="del" onclick="clearHotel('${tripId}','${planId}','${legId}')">清除飯店資訊</button>`:""}`);
+}
+function saveHotel(tripId,planId,legId){
+  const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
+  const lg=p.legs.find(x=>x.id===legId);
+  lg.hotel={ name:document.getElementById("f_hname").value.trim(),
+    addr:document.getElementById("f_haddr").value.trim() };
+  saveTrips(); closeSheet(); render();
+}
+function clearHotel(tripId,planId,legId){
+  const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
+  const lg=p.legs.find(x=>x.id===legId);
+  lg.hotel=null; saveTrips(); closeSheet(); render();
+}
+// 飯店導航目標（有地址用地址，否則用飯店名+城市，再否則城市名）
+function hotelTarget(lg){
+  if(lg.hotel&&lg.hotel.addr) return lg.hotel.addr;
+  if(lg.hotel&&lg.hotel.name) return lg.hotel.name+" "+lg.city;
+  return lg.city;
+}
+
+/* 交通表單（腳印=城市間 / 飛機=機場接駁），存方式+時間+費用 */
+function openTrans(tripId,planId,legId,kind){
+  const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
+  const lg=p.legs.find(x=>x.id===legId);
+  const i=p.legs.findIndex(x=>x.id===legId);
+  const tr=(kind==="airport"?lg.airport:lg.toNext)||{mode:"",time:"",cost:""};
+  const title = kind==="airport"
+    ? `✈️ ${esc(lg.city)} 機場接駁`
+    : `👣 ${esc(lg.city)} → ${esc(p.legs[i+1]?p.legs[i+1].city:"下一城")}`;
+  const ph = kind==="airport" ? "例：機場快線、計程車進市區" : "例：巴士、火車、自駕";
+  // Google Maps 路線：機場接駁=現在位置→本段飯店；城市間=本段飯店→下一段飯店
+  let origin, dest;
+  if(kind==="airport"){ origin=""; dest=hotelTarget(lg); }  // origin 留空 = 現在位置
+  else { origin=hotelTarget(lg); dest=hotelTarget(p.legs[i+1]||lg); }
+  const mapUrl=`https://www.google.com/maps/dir/?api=1`+
+    (origin?`&origin=${encodeURIComponent(origin)}`:"")+
+    `&destination=${encodeURIComponent(dest)}`;
+  const mapHint = kind==="airport" ? "現在位置 → "+esc(dest) : esc(origin)+" → "+esc(dest);
+  openSheet(`<h3>${title}</h3>
+    <a href="${mapUrl}" target="_blank" rel="noopener" class="mapbtn">🗺️ 用 Google Maps 查路線</a>
+    <div class="mini" style="margin:4px 0 2px;color:var(--soft)">${mapHint}</div>
+    <label>交通方式</label><input id="f_mode" value="${esc(tr.mode||"")}" placeholder="${ph}">
+    <div style="display:flex;gap:10px">
+      <div style="flex:1"><label>時間</label><input id="f_time" value="${esc(tr.time||"")}" placeholder="例：2 小時"></div>
+      <div style="flex:1"><label>費用</label><input id="f_cost" type="number" inputmode="numeric" value="${esc(tr.cost||"")}" placeholder="例：300"></div>
+    </div>
+    <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
+      <button class="save" onclick="saveTrans('${tripId}','${planId}','${legId}','${kind}')">儲存</button></div>
+    ${(tr.mode||tr.time||tr.cost)?`<button class="del" onclick="clearTrans('${tripId}','${planId}','${legId}','${kind}')">清除這段交通</button>`:""}`);
+}
+function saveTrans(tripId,planId,legId,kind){
+  const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
+  const lg=p.legs.find(x=>x.id===legId);
+  const tr={ mode:document.getElementById("f_mode").value.trim(),
+    time:document.getElementById("f_time").value.trim(),
+    cost:document.getElementById("f_cost").value.trim() };
+  if(kind==="airport") lg.airport=tr; else lg.toNext=tr;
+  saveTrips(); closeSheet(); render();
+}
+function clearTrans(tripId,planId,legId,kind){
+  const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
+  const lg=p.legs.find(x=>x.id===legId);
+  if(kind==="airport") lg.airport=null; else lg.toNext=null;
+  saveTrips(); closeSheet(); render();
+}
+
+/* 停留段表單（城市從想去清單點選 + 晚數） */
+let legCity="";
+function openLeg(tripId,planId,legId){
+  const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
+  const lg=legId?(p.legs||[]).find(x=>x.id===legId):{city:"",days:1};
+  legCity=lg.city||"";
+  const wish=t.wishCities||[];
+  const chips = wish.length
+    ? `<div class="chip-row" id="legcitypick">${wish.map(c=>`<button class="chip ${c===legCity?'on':''}" data-c="${esc(c)}">${esc(c)}</button>`).join("")}</div>`
+    : `<div class="mini" style="color:var(--soft);margin:4px 0">（上面還沒有想去的城市，可直接在下方手動輸入）</div>`;
+  openSheet(`<h3>${legId?"編輯停留段":"加一段停留"}</h3>
+    <label>城市（點選或手動輸入）</label>
+    ${chips}
+    <input id="f_city" value="${esc(lg.city||"")}" placeholder="也可手動輸入" style="margin-top:6px">
+    <label>住幾晚</label><input id="f_days" type="number" inputmode="numeric" value="${lg.days||1}" placeholder="2">
+    <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
+      <button class="save" onclick="saveLeg('${tripId}','${planId}','${legId||""}')">儲存</button></div>
+    ${legId?`<button class="del" onclick="delLeg('${tripId}','${planId}','${legId}')">刪除這一段</button>`:""}`);
+  document.querySelectorAll("#legcitypick .chip").forEach(b=>b.onclick=()=>{
+    legCity=b.dataset.c;
+    document.getElementById("f_city").value=b.dataset.c;
+    document.querySelectorAll("#legcitypick .chip").forEach(x=>x.classList.toggle("on",x===b));
+  });
+}
+function saveLeg(tripId,planId,legId){
+  const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
+  if(!Array.isArray(p.legs)) p.legs=[];
+  const city=document.getElementById("f_city").value.trim(); if(!city){alert("請選擇或輸入城市");return;}
+  const days=Math.max(0,parseInt(document.getElementById("f_days").value)||0);
+  if(legId){ Object.assign(p.legs.find(x=>x.id===legId),{city,days}); }
+  else{ p.legs.push({id:uid(),city,days,fly:null}); }
+  saveTrips(); closeSheet(); render();
+}
+function delLeg(tripId,planId,legId){
+  const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
+  p.legs=(p.legs||[]).filter(x=>x.id!==legId); saveTrips(); closeSheet(); render();
+}
+
+let spendCat="餐飲";
+function openSpend(id){
+  const s=id?spends.find(x=>x.id===id):{date:today(),cat:"餐飲",name:"",amt:""};
+  spendCat=s.cat;
+  openSheet(`<h3>${id?"編輯花費":"記一筆"}</h3>
+    <label>項目</label><input id="f_name" value="${esc(s.name)}" placeholder="例：午餐 拉麵">
+    <div style="display:flex;gap:10px">
+      <div style="flex:1"><label>金額</label><input id="f_amt" type="number" inputmode="numeric" value="${s.amt||""}" placeholder="0"></div>
+      <div style="flex:1"><label>日期</label><input id="f_date" type="date" value="${s.date||today()}"></div>
+    </div>
+    <label>分類</label>
+    <div class="chip-row" id="catpick">${CATS.map(c=>`<button class="chip ${c===spendCat?'on':''}" data-c="${c}">${c}</button>`).join("")}</div>
+    <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
+      <button class="save" onclick="saveSpend('${id||""}')">儲存</button></div>
+    ${id?`<button class="del" onclick="delSpend('${id}')">刪除這筆</button>`:""}`);
+  document.querySelectorAll("#catpick .chip").forEach(b=>b.onclick=()=>{
+    spendCat=b.dataset.c; document.querySelectorAll("#catpick .chip").forEach(x=>x.classList.toggle("on",x===b));
+  });
+}
+function saveSpend(id){
+  const name=document.getElementById("f_name").value.trim(); if(!name){alert("請輸入項目");return;}
+  const o={name,amt:Number(document.getElementById("f_amt").value)||0,
+    date:document.getElementById("f_date").value,cat:spendCat};
+  if(id){ Object.assign(spends.find(x=>x.id===id),o); }
+  else{ spends.push({id:uid(),...o}); }
+  saveSpends(); closeSheet(); render();
+}
+function delSpend(id){ spends=spends.filter(x=>x.id!==id); saveSpends(); closeSheet(); render(); }
+
+let packCat="衣物";
+function openPack(id){
+  const p=id?packs.find(x=>x.id===id):{cat:"衣物",name:""};
+  packCat=p.cat;
+  openSheet(`<h3>${id?"編輯物品":"新增物品"}</h3>
+    <label>物品名稱</label><input id="f_name" value="${esc(p.name)}" placeholder="例：護照、充電線">
+    <label>分類</label>
+    <div class="chip-row" id="pcatpick">${PACK_CATS.map(c=>`<button class="chip ${c===packCat?'on':''}" data-c="${c}">${c}</button>`).join("")}</div>
+    <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
+      <button class="save" onclick="savePack('${id||""}')">儲存</button></div>
+    ${id?`<button class="del" onclick="delPack('${id}')">刪除</button>`:""}`);
+  document.querySelectorAll("#pcatpick .chip").forEach(b=>b.onclick=()=>{
+    packCat=b.dataset.c; document.querySelectorAll("#pcatpick .chip").forEach(x=>x.classList.toggle("on",x===b));
+  });
+}
+function savePack(id){
+  const name=document.getElementById("f_name").value.trim(); if(!name){alert("請輸入名稱");return;}
+  if(id){ Object.assign(packs.find(x=>x.id===id),{name,cat:packCat}); }
+  else{ packs.push({id:uid(),name,cat:packCat,done:false}); }
+  savePacks(); closeSheet(); render();
+}
+function delPack(id){ packs=packs.filter(x=>x.id!==id); savePacks(); closeSheet(); render(); }
+
+function openMemo(id){
+  const m=id?memos.find(x=>x.id===id):{date:today(),title:"",body:""};
+  openSheet(`<h3>${id?"編輯回憶":"寫一則回憶"}</h3>
+    <label>標題</label><input id="f_title" value="${esc(m.title)}" placeholder="例：在京都的第一天">
+    <label>日期</label><input id="f_date" type="date" value="${m.date||today()}">
+    <label>內容</label><textarea id="f_body" style="min-height:130px" placeholder="今天發生了什麼…">${esc(m.body)}</textarea>
+    <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
+      <button class="save" onclick="saveMemo('${id||""}')">儲存</button></div>
+    ${id?`<button class="del" onclick="delMemo('${id}')">刪除這則</button>`:""}`);
+}
+function saveMemo(id){
+  const title=document.getElementById("f_title").value.trim();
+  const body=document.getElementById("f_body").value.trim();
+  if(!title&&!body){alert("請至少寫點什麼");return;}
+  const o={title,body,date:document.getElementById("f_date").value};
+  if(id){ Object.assign(memos.find(x=>x.id===id),o); }
+  else{ memos.push({id:uid(),...o}); }
+  saveMemos(); closeSheet(); render();
+}
+function delMemo(id){ memos=memos.filter(x=>x.id!==id); saveMemos(); closeSheet(); render(); }
+
+function today(){ const d=new Date(),p=n=>String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
+
+/* ===== 導覽 & 啟動 ===== */
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("on"));
+  t.classList.add("on"); view=t.dataset.view;
+  tripNav="list"; openTripId=null;
+  tripDayFilter="全部"; packCatFilter="全部"; render();
+});
+document.getElementById("fab").onclick=()=>{
+  if(view==="trip"){ tripNav==="detail" ? openPlan(openTripId) : openTrip(); }
+  else if(view==="budget") openSpend();
+  else if(view==="pack") openPack();
+  else openMemo();
+};
+
+render();
+cloudInit();
+</script>
+</body>
+</html>
