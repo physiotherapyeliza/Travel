@@ -173,7 +173,8 @@
   .plancard{flex:0 0 80%;max-width:80%;scroll-snap-align:center;background:var(--card);
     border:2px solid var(--line);border-radius:18px;padding:14px;}
   .plancard.decided{border-color:var(--sun);background:#fffaf3;}
-  .leg{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--line);}
+  .leg{display:flex;align-items:center;gap:6px;padding:5px 0;}
+  .leg+.footstep{margin-top:-2px;}
   .legmove{display:flex;flex-direction:column;gap:1px;}
   .legbtn{border:none;background:var(--card2);border-radius:6px;width:24px;height:18px;font-size:10px;
     color:var(--sky-deep);cursor:pointer;padding:0;line-height:1;}
@@ -185,13 +186,19 @@
   .legfly{border:none;background:none;font-size:14px;cursor:pointer;opacity:.55;padding:2px;}
   .legdel{border:none;background:none;color:var(--err);font-size:14px;cursor:pointer;padding:2px;opacity:.6;}
   .legdate{font-size:11px;color:var(--soft);font-weight:500;margin-top:1px;}
-  .transbtn{width:100%;text-align:left;border:2px dashed var(--sky);background:#f4fafd;color:var(--sky-deep);
-    border-radius:11px;padding:7px 10px;font-size:12px;font-weight:600;cursor:pointer;margin:5px 0;line-height:1.3;}
-  .transbtn.foot{border-style:solid;border-color:var(--line);background:var(--card2);color:var(--ink);}
-  .footstep{display:flex;justify-content:center;}
-  .footstep .transbtn{width:92%;}
+  .flytag-edit{display:inline-block;background:var(--sky);color:#fff;font-size:11px;padding:2px 9px;
+    border-radius:9px;font-weight:700;cursor:pointer;}
+  .flytag-edit.hastrans{background:var(--sky-deep);}
+  .footstep{display:flex;justify-content:center;padding:2px 0;}
+  .footbtn{border:none;background:none;font-size:16px;cursor:pointer;opacity:.65;padding:2px 10px;border-radius:8px;}
+  .footbtn.hastrans{background:var(--card2);opacity:1;}
   .routetrans{font-size:12px;color:var(--sky-deep);margin-top:3px;background:#f4fafd;border-radius:8px;padding:3px 8px;display:inline-block;}
   .routetrans-inline{font-size:12px;color:var(--soft);font-weight:600;}
+  .routehotel{font-size:12px;color:var(--sun);margin-top:3px;cursor:pointer;font-weight:600;}
+  .routehotel.empty{color:var(--soft);font-weight:500;}
+  .routestop{cursor:pointer;}
+  .mapbtn{display:block;text-align:center;background:var(--sky);color:#fff;border-radius:13px;padding:11px;
+    font-size:15px;font-weight:800;text-decoration:none;margin-bottom:4px;}
   .checkok{margin-top:10px;background:#e7f3ec;color:var(--ok);border-radius:10px;padding:8px 10px;font-size:13px;font-weight:700;}
   .checkwarn{margin-top:10px;background:#fbeae7;color:var(--err);border-radius:10px;padding:8px 10px;font-size:13px;font-weight:700;}
 </style>
@@ -409,9 +416,12 @@ function renderTripDetail(){
                 : lg.fly==="out"?`<span class="flytag">出</span>`:"";
       const dt=dts[i];
       const dateStr = dt ? `${fmtMDObj(dt.start)}–${fmtMDObj(dt.end)}` : "";
-      html+=`<div class="routestop">
+      const hotelInfo = lg.hotel&&(lg.hotel.name||lg.hotel.addr)
+        ? `<div class="routehotel">🏨 ${esc(lg.hotel.name||lg.hotel.addr)}</div>` : `<div class="routehotel empty">🏨 點此設定飯店</div>`;
+      html+=`<div class="routestop" data-hotel="${decided.id}|${lg.id}">
           <div class="routedot">🏙️</div>
           <div class="routecity"><b>${esc(lg.city)}</b> <span class="mini">${dateStr}（${lg.days||0}晚）</span> ${fly}
+            ${hotelInfo}
             ${lg.fly&&transSummary(lg.airport)?`<div class="routetrans">✈️🚐 ${esc(transSummary(lg.airport))}</div>`:""}
           </div>
         </div>`;
@@ -433,7 +443,11 @@ function renderTripDetail(){
   }
 
   main.innerHTML=html;
-  main.querySelector('[data-backlist]').onclick=()=>{ tripNav="list"; openTripId=null; render(); };
+  // 還原方案卡橫向捲動位置（避免改入/出後跳回最左）
+  const ps=main.querySelector(".planscroll");
+  if(ps && window.__planScrollX!=null){ ps.scrollLeft=window.__planScrollX; }
+  if(ps){ ps.addEventListener("scroll",()=>{ window.__planScrollX=ps.scrollLeft; }); }
+  main.querySelector('[data-backlist]').onclick=()=>{ tripNav="list"; openTripId=null; window.__planScrollX=null; render(); };
   main.querySelector('[data-edittrip]').onclick=()=>openTrip(t.id);
   // 想去城市的事件
   document.getElementById("wishAdd").onclick=()=>openWishAdd(t.id);
@@ -441,6 +455,10 @@ function renderTripDetail(){
     t.wishCities=t.wishCities.filter(c=>c!==b.dataset.wishdel); saveTrips(); render();
   });
   bindPlanCardEvents(t);
+  main.querySelectorAll('[data-hotel]').forEach(b=>b.onclick=()=>{
+    const [pid,lid]=b.dataset.hotel.split("|");
+    openHotel(t.id,pid,lid);
+  });
   document.getElementById("aiGo").onclick=()=>{ if(t.wishCities.length) askAI(t); };
   document.getElementById("aiKey").onclick=()=>showKeyForm(t);
 }
@@ -461,7 +479,11 @@ function planCardHTML(t,p){
   const isDecided=p.id===t.decidedPlan;
   const dts=computeLegDates(t,legs);
   const legsHtml = legs.length ? legs.map((lg,i)=>{
-    const fly = lg.fly==="in"?" 入":lg.fly==="out"?" 出":"";
+    const flyTxt = lg.fly==="in"?"入":lg.fly==="out"?"出":"";
+    const flyHasTrans = lg.fly && transSummary(lg.airport);
+    const flyTag = flyTxt
+      ? `<span class="flytag-edit ${flyHasTrans?'hastrans':''}" data-trans="${p.id}|${lg.id}|airport">${flyTxt}${flyHasTrans?' 🚐':''}</span>`
+      : "";
     const dt=dts[i];
     const dateStr = dt ? `${fmtMDObj(dt.start)}–${fmtMDObj(dt.end)}` : "";
     let block=`<div class="leg">
@@ -469,20 +491,17 @@ function planCardHTML(t,p){
           <button class="legbtn" data-up="${p.id}|${lg.id}" ${i===0?'disabled':''}>▲</button>
           <button class="legbtn" data-down="${p.id}|${lg.id}" ${i===legs.length-1?'disabled':''}>▼</button>
         </div>
-        <div class="legcity">${i+1}. ${esc(lg.city)}<span class="flymini">${fly}</span>
+        <div class="legcity">${i+1}. ${esc(lg.city)} ${flyTag}
           ${dateStr?`<div class="legdate">${dateStr}</div>`:""}
         </div>
         <button class="legdays" data-days="${p.id}|${lg.id}">${lg.days||0}晚</button>
-        <button class="legfly" data-fly="${p.id}|${lg.id}">✈️</button>
+        <button class="legfly" data-fly="${p.id}|${lg.id}" title="標記搭飛機進/出">✈️</button>
         <button class="legdel" data-legdel="${p.id}|${lg.id}">✕</button>
       </div>`;
-    // 機場接駁（這段有標入/出時）
-    if(lg.fly){
-      block+=`<button class="transbtn" data-trans="${p.id}|${lg.id}|airport">✈️🚐 ${transSummary(lg.airport)||"機場接駁交通…"}</button>`;
-    }
-    // 到下一城的腳印交通（非最後一段）
+    // 到下一城的腳印（點它填城市間交通；有填則加底色提示）
     if(i<legs.length-1){
-      block+=`<div class="footstep"><button class="transbtn foot" data-trans="${p.id}|${lg.id}|toNext">👣 ${transSummary(lg.toNext)||`往 ${esc(legs[i+1].city)} 的交通…`}</button></div>`;
+      const hasT=transSummary(lg.toNext);
+      block+=`<div class="footstep"><button class="footbtn ${hasT?'hastrans':''}" data-trans="${p.id}|${lg.id}|toNext" title="城市間交通">👣${hasT?' 🚌':''}</button></div>`;
     }
     return block;
   }).join("") : `<div class="mini" style="color:var(--soft);padding:8px 0">還沒有停留段</div>`;
@@ -914,6 +933,38 @@ function delPlan(tripId,planId){
   t.plans=(t.plans||[]).filter(x=>x.id!==planId); saveTrips(); closeSheet(); render();
 }
 
+/* 飯店表單（定案路線城市點選後編輯，存名稱+地址） */
+function openHotel(tripId,planId,legId){
+  const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
+  const lg=p.legs.find(x=>x.id===legId);
+  const h=lg.hotel||{name:"",addr:""};
+  openSheet(`<h3>🏨 ${esc(lg.city)} 的飯店</h3>
+    <label>飯店名稱</label><input id="f_hname" value="${esc(h.name||"")}" placeholder="例：布拉格洲際酒店">
+    <label>地址</label><input id="f_haddr" value="${esc(h.addr||"")}" placeholder="貼上飯店地址，導航更精準">
+    <div class="mini" style="margin-top:6px;color:var(--soft)">填了地址後，交通導航會直接帶你到這間飯店。</div>
+    <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
+      <button class="save" onclick="saveHotel('${tripId}','${planId}','${legId}')">儲存</button></div>
+    ${(h.name||h.addr)?`<button class="del" onclick="clearHotel('${tripId}','${planId}','${legId}')">清除飯店資訊</button>`:""}`);
+}
+function saveHotel(tripId,planId,legId){
+  const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
+  const lg=p.legs.find(x=>x.id===legId);
+  lg.hotel={ name:document.getElementById("f_hname").value.trim(),
+    addr:document.getElementById("f_haddr").value.trim() };
+  saveTrips(); closeSheet(); render();
+}
+function clearHotel(tripId,planId,legId){
+  const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
+  const lg=p.legs.find(x=>x.id===legId);
+  lg.hotel=null; saveTrips(); closeSheet(); render();
+}
+// 飯店導航目標（有地址用地址，否則用飯店名+城市，再否則城市名）
+function hotelTarget(lg){
+  if(lg.hotel&&lg.hotel.addr) return lg.hotel.addr;
+  if(lg.hotel&&lg.hotel.name) return lg.hotel.name+" "+lg.city;
+  return lg.city;
+}
+
 /* 交通表單（腳印=城市間 / 飛機=機場接駁），存方式+時間+費用 */
 function openTrans(tripId,planId,legId,kind){
   const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
@@ -924,7 +975,17 @@ function openTrans(tripId,planId,legId,kind){
     ? `✈️ ${esc(lg.city)} 機場接駁`
     : `👣 ${esc(lg.city)} → ${esc(p.legs[i+1]?p.legs[i+1].city:"下一城")}`;
   const ph = kind==="airport" ? "例：機場快線、計程車進市區" : "例：巴士、火車、自駕";
+  // Google Maps 路線：機場接駁=現在位置→本段飯店；城市間=本段飯店→下一段飯店
+  let origin, dest;
+  if(kind==="airport"){ origin=""; dest=hotelTarget(lg); }  // origin 留空 = 現在位置
+  else { origin=hotelTarget(lg); dest=hotelTarget(p.legs[i+1]||lg); }
+  const mapUrl=`https://www.google.com/maps/dir/?api=1`+
+    (origin?`&origin=${encodeURIComponent(origin)}`:"")+
+    `&destination=${encodeURIComponent(dest)}`;
+  const mapHint = kind==="airport" ? "現在位置 → "+esc(dest) : esc(origin)+" → "+esc(dest);
   openSheet(`<h3>${title}</h3>
+    <a href="${mapUrl}" target="_blank" rel="noopener" class="mapbtn">🗺️ 用 Google Maps 查路線</a>
+    <div class="mini" style="margin:4px 0 2px;color:var(--soft)">${mapHint}</div>
     <label>交通方式</label><input id="f_mode" value="${esc(tr.mode||"")}" placeholder="${ph}">
     <div style="display:flex;gap:10px">
       <div style="flex:1"><label>時間</label><input id="f_time" value="${esc(tr.time||"")}" placeholder="例：2 小時"></div>
