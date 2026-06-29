@@ -728,6 +728,15 @@ function renderSim(t){
 
   // 建立逐日清單
   const days=buildDailyPlan(t,decided,dts);
+  if(!days.length){
+    html+=`<div class="empty"><div class="big">無法產生逐日行程</div>`+
+      (!t.startDate?`這趟旅程沒有「出發日期」，請回列表編輯旅程、補上日期，才能依日期攤平。`
+        :`定案路線沒有可用的停留段，請回第一部分確認。`)+`</div>`;
+    main.innerHTML=html;
+    bindPhaseTabs(t);
+    main.querySelector('[data-backlist]').onclick=()=>{ tripNav="list"; tripPhase="plan"; openTripId=null; render(); };
+    return;
+  }
   days.forEach(d=>{
     html+=`<div class="daycard">
         <div class="dayhead">${d.dateLabel} <span class="dayweek">${d.weekday}</span></div>`;
@@ -759,31 +768,35 @@ function renderSim(t){
 function buildDailyPlan(t,decided,dts){
   const weekdays=["日","一","二","三","四","五","六"];
   const days=[];
+  let dayCounter=0;
   decided.legs.forEach((lg,li)=>{
-    const dt=dts[li]; if(!dt) return;
+    const dt=dts[li];  // 可能為 null（沒設出發日期）
     const sp=(t.spots&&t.spots[lg.id])||{};
-    const routeDays=splitRouteByDay(sp.route, lg.days||1);  // 把該段景點文字按天拆
+    const routeDays=splitRouteByDay(sp.route, lg.days||1);
     const hotel = lg.hotel&&(lg.hotel.name||lg.hotel.addr) ? (lg.hotel.name||lg.hotel.addr) : "";
     const nights=Math.max(1,Number(lg.days)||1);
     for(let n=0;n<nights;n++){
-      const date=new Date(dt.start); date.setDate(date.getDate()+n);
+      dayCounter++;
+      let dateLabel, weekday="";
+      if(dt){
+        const date=new Date(dt.start); date.setDate(date.getDate()+n);
+        dateLabel=`${date.getMonth()+1}/${date.getDate()}`;
+        weekday="週"+weekdays[date.getDay()];
+      } else {
+        dateLabel=`第 ${dayCounter} 天`;
+      }
       const dayObj={
-        date,
-        dateLabel:`${date.getMonth()+1}/${date.getDate()}`,
-        weekday:"週"+weekdays[date.getDay()],
-        city:lg.city,
-        hotel,
+        dateLabel, weekday,
+        city:lg.city, hotel,
         spots:routeDays[n]||routeDays[0]||"",
         move:null, airport:null
       };
-      // 換城市那天（這段第一天，且不是整趟第一段）
       if(n===0 && li>0){
         const prev=decided.legs[li-1];
         dayObj.move={ from:prev.city, to:lg.city,
           trans:transSummary(prev.toNext),
           bk: prev.toNext&&prev.toNext.booking==="need"?"🎫需預訂":prev.toNext&&prev.toNext.booking==="walkup"?"💁現場購票":"" };
       }
-      // 機場進出
       if(li===0 && n===0 && lg.fly==="in") dayObj.airport=`抵達 ${lg.city} 機場，前往市區`;
       if(li===decided.legs.length-1 && n===nights-1 && lg.fly==="out") dayObj.airport=`前往 ${lg.city} 機場，準備返程`;
       days.push(dayObj);
