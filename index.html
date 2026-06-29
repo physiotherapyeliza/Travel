@@ -180,6 +180,10 @@
     color:var(--sky-deep);cursor:pointer;padding:0;line-height:1;}
   .legbtn:disabled{opacity:.3;cursor:default;}
   .legcity{flex:1;font-size:14px;font-weight:600;}
+  .cityname{cursor:pointer;border-radius:8px;padding:1px 4px;}
+  .cityname.nohotel{color:var(--ink);}
+  .cityname.hashotel{color:var(--ok);font-weight:700;}
+  .hotelname{font-size:11px;color:var(--ok);font-weight:600;margin-top:1px;}
   .flymini{color:var(--sky);font-size:12px;}
   .legdays{border:2px solid var(--line);background:var(--card);border-radius:10px;padding:3px 8px;
     font-size:13px;font-weight:700;color:var(--sky-deep);cursor:pointer;white-space:nowrap;}
@@ -199,6 +203,15 @@
   .routestop{cursor:pointer;}
   .mapbtn{display:block;text-align:center;background:var(--sky);color:#fff;border-radius:13px;padding:11px;
     font-size:15px;font-weight:800;text-decoration:none;margin-bottom:4px;}
+  .bkstat{border-radius:10px;padding:8px 10px;font-size:14px;font-weight:700;margin-bottom:10px;}
+  .bkstat.need{background:#fbeae7;color:var(--err);}
+  .bkstat.walkup{background:#e7f3ec;color:var(--ok);}
+  .bkresult{border-radius:10px;padding:9px 11px;font-size:14px;font-weight:700;margin-top:8px;}
+  .bkresult.need{background:#fbeae7;color:var(--err);}
+  .bkresult.walkup{background:#e7f3ec;color:var(--ok);}
+  .bktag{font-size:11px;padding:1px 7px;border-radius:8px;font-weight:700;}
+  .bktag.need{background:#fbeae7;color:var(--err);}
+  .bktag.walkup{background:#e7f3ec;color:var(--ok);}
   .checkok{margin-top:10px;background:#e7f3ec;color:var(--ok);border-radius:10px;padding:8px 10px;font-size:13px;font-weight:700;}
   .checkwarn{margin-top:10px;background:#fbeae7;color:var(--err);border-radius:10px;padding:8px 10px;font-size:13px;font-weight:700;}
 </style>
@@ -417,17 +430,21 @@ function renderTripDetail(){
       const dt=dts[i];
       const dateStr = dt ? `${fmtMDObj(dt.start)}–${fmtMDObj(dt.end)}` : "";
       const hotelInfo = lg.hotel&&(lg.hotel.name||lg.hotel.addr)
-        ? `<div class="routehotel">🏨 ${esc(lg.hotel.name||lg.hotel.addr)}</div>` : `<div class="routehotel empty">🏨 點此設定飯店</div>`;
+        ? `<div class="routehotel">🛏️ ${esc(lg.hotel.name||lg.hotel.addr)}</div>` : `<div class="routehotel empty">🛏️ 點此設定飯店</div>`;
+      const airBk = lg.fly&&lg.airport&&lg.airport.booking;
+      const airBkTag = airBk==="need"?` <span class="bktag need">🎫需預訂</span>`:airBk==="walkup"?` <span class="bktag walkup">✅可現場買</span>`:"";
       html+=`<div class="routestop" data-hotel="${decided.id}|${lg.id}">
           <div class="routedot">🏙️</div>
           <div class="routecity"><b>${esc(lg.city)}</b> <span class="mini">${dateStr}（${lg.days||0}晚）</span> ${fly}
             ${hotelInfo}
-            ${lg.fly&&transSummary(lg.airport)?`<div class="routetrans">✈️🚐 ${esc(transSummary(lg.airport))}</div>`:""}
+            ${lg.fly&&transSummary(lg.airport)?`<div class="routetrans">✈️🚐 ${esc(transSummary(lg.airport))}${airBkTag}</div>`:(airBk?`<div class="routetrans">✈️🚐${airBkTag}</div>`:"")}
           </div>
         </div>`;
       if(i<decided.legs.length-1){
         const tn=transSummary(lg.toNext);
-        html+=`<div class="routestep">👣${tn?` <span class="routetrans-inline">${esc(tn)}</span>`:""}</div>`;
+        const tnBk=lg.toNext&&lg.toNext.booking;
+        const tnBkTag=tnBk==="need"?` <span class="bktag need">🎫需預訂</span>`:tnBk==="walkup"?` <span class="bktag walkup">✅可現場買</span>`:"";
+        html+=`<div class="routestep">👣${tn?` <span class="routetrans-inline">${esc(tn)}</span>`:""}${tnBkTag}</div>`;
       }
     });
     // 回程航班吻合檢查
@@ -481,27 +498,34 @@ function planCardHTML(t,p){
   const legsHtml = legs.length ? legs.map((lg,i)=>{
     const flyTxt = lg.fly==="in"?"入":lg.fly==="out"?"出":"";
     const flyHasTrans = lg.fly && transSummary(lg.airport);
+    const flyBk = lg.fly && lg.airport && lg.airport.booking;
+    const flyBkIcon = flyBk==="need"?" 🎫":flyBk==="walkup"?" ✅":"";
     const flyTag = flyTxt
-      ? `<span class="flytag-edit ${flyHasTrans?'hastrans':''}" data-trans="${p.id}|${lg.id}|airport">${flyTxt}${flyHasTrans?' 🚐':''}</span>`
+      ? `<span class="flytag-edit ${flyHasTrans?'hastrans':''}" data-flymenu="${p.id}|${lg.id}">${flyTxt}${flyHasTrans?' 🚐':''}${flyBkIcon}</span>`
       : "";
     const dt=dts[i];
     const dateStr = dt ? `${fmtMDObj(dt.start)}–${fmtMDObj(dt.end)}` : "";
+    const hasHotel = lg.hotel&&(lg.hotel.name||lg.hotel.addr);
     let block=`<div class="leg">
         <div class="legmove">
           <button class="legbtn" data-up="${p.id}|${lg.id}" ${i===0?'disabled':''}>▲</button>
           <button class="legbtn" data-down="${p.id}|${lg.id}" ${i===legs.length-1?'disabled':''}>▼</button>
         </div>
-        <div class="legcity">${i+1}. ${esc(lg.city)} ${flyTag}
+        <div class="legcity">
+          <span class="cityname ${hasHotel?'hashotel':'nohotel'}" data-hotel="${p.id}|${lg.id}">${i+1}. ${esc(lg.city)}${hasHotel?' 🛏️':''}</span> ${flyTag}
+          ${hasHotel?`<div class="hotelname">${esc(lg.hotel.name||lg.hotel.addr)}</div>`:""}
           ${dateStr?`<div class="legdate">${dateStr}</div>`:""}
         </div>
         <button class="legdays" data-days="${p.id}|${lg.id}">${lg.days||0}晚</button>
         <button class="legfly" data-fly="${p.id}|${lg.id}" title="標記搭飛機進/出">✈️</button>
         <button class="legdel" data-legdel="${p.id}|${lg.id}">✕</button>
       </div>`;
-    // 到下一城的腳印（點它填城市間交通；有填則加底色提示）
+    // 到下一城的腳印（點它跳選單：地圖 / 填交通 / 問AI）
     if(i<legs.length-1){
       const hasT=transSummary(lg.toNext);
-      block+=`<div class="footstep"><button class="footbtn ${hasT?'hastrans':''}" data-trans="${p.id}|${lg.id}|toNext" title="城市間交通">👣${hasT?' 🚌':''}</button></div>`;
+      const bk=lg.toNext&&lg.toNext.booking;
+      const bkIcon=bk==="need"?" 🎫":bk==="walkup"?" ✅":"";
+      block+=`<div class="footstep"><button class="footbtn ${hasT||bk?'hastrans':''}" data-footmenu="${p.id}|${lg.id}" title="城市間交通">👣${hasT?' 🚌':''}${bkIcon}</button></div>`;
     }
     return block;
   }).join("") : `<div class="mini" style="color:var(--soft);padding:8px 0">還沒有停留段</div>`;
@@ -528,9 +552,17 @@ function bindPlanCardEvents(t){
   });
   main.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>moveLeg(t,b.dataset.up,-1));
   main.querySelectorAll('[data-down]').forEach(b=>b.onclick=()=>moveLeg(t,b.dataset.down,1));
-  main.querySelectorAll('[data-trans]').forEach(b=>b.onclick=()=>{
-    const [pid,lid,kind]=b.dataset.trans.split("|");
-    openTrans(t.id,pid,lid,kind);
+  // 點城市名 → 編輯飯店
+  main.querySelectorAll('[data-hotel]').forEach(b=>b.onclick=()=>{
+    const [pid,lid]=b.dataset.hotel.split("|"); openHotel(t.id,pid,lid);
+  });
+  // 點腳印 → 選單（地圖 / 填交通）
+  main.querySelectorAll('[data-footmenu]').forEach(b=>b.onclick=()=>{
+    const [pid,lid]=b.dataset.footmenu.split("|"); openTransMenu(t.id,pid,lid,"toNext");
+  });
+  // 點入/出 → 選單（地圖 / 填資訊）
+  main.querySelectorAll('[data-flymenu]').forEach(b=>b.onclick=()=>{
+    const [pid,lid]=b.dataset.flymenu.split("|"); openTransMenu(t.id,pid,lid,"airport");
   });
   main.querySelectorAll('[data-days]').forEach(b=>b.onclick=()=>{
     const [pid,lid]=b.dataset.days.split("|");
@@ -539,7 +571,7 @@ function bindPlanCardEvents(t){
   main.querySelectorAll('[data-fly]').forEach(b=>b.onclick=()=>{
     const [pid,lid]=b.dataset.fly.split("|");
     const p=t.plans.find(x=>x.id===pid); const lg=p.legs.find(x=>x.id===lid);
-    lg.fly = lg.fly==="in"?"out":lg.fly==="out"?null:"in"; // 循環：無→出發→返程→無
+    lg.fly = lg.fly==="in"?"out":lg.fly==="out"?null:"in"; // 循環：無→入→出→無
     saveTrips(); render();
   });
   main.querySelectorAll('[data-legdel]').forEach(b=>b.onclick=()=>{
@@ -938,7 +970,7 @@ function openHotel(tripId,planId,legId){
   const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
   const lg=p.legs.find(x=>x.id===legId);
   const h=lg.hotel||{name:"",addr:""};
-  openSheet(`<h3>🏨 ${esc(lg.city)} 的飯店</h3>
+  openSheet(`<h3>🛏️ ${esc(lg.city)} 的飯店</h3>
     <label>飯店名稱</label><input id="f_hname" value="${esc(h.name||"")}" placeholder="例：布拉格洲際酒店">
     <label>地址</label><input id="f_haddr" value="${esc(h.addr||"")}" placeholder="貼上飯店地址，導航更精準">
     <div class="mini" style="margin-top:6px;color:var(--soft)">填了地址後，交通導航會直接帶你到這間飯店。</div>
@@ -965,7 +997,90 @@ function hotelTarget(lg){
   return lg.city;
 }
 
-/* 交通表單（腳印=城市間 / 飛機=機場接駁），存方式+時間+費用 */
+/* 交通選單：點腳印或入/出時，先選「開 Google Maps」或「填交通資訊」 */
+function openTransMenu(tripId,planId,legId,kind){
+  const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
+  const lg=p.legs.find(x=>x.id===legId);
+  const i=p.legs.findIndex(x=>x.id===legId);
+  // 決定地圖起終點
+  let origin, dest, hint;
+  if(kind==="airport"){
+    const airport=`${lg.city} 國際機場`;   // Google Maps 會對應到該城市最近的國際機場
+    if(lg.fly==="in"){ origin=airport; dest=hotelTarget(lg); hint=`${lg.city}機場 → ${dest}`; }
+    else { origin=hotelTarget(lg); dest=airport; hint=`${origin} → ${lg.city}機場`; }
+  } else {
+    origin=hotelTarget(lg); dest=hotelTarget(p.legs[i+1]||lg); hint=origin+" → "+dest;
+  }
+  const mapUrl=`https://www.google.com/maps/dir/?api=1`+
+    (origin?`&origin=${encodeURIComponent(origin)}`:"")+
+    (dest?`&destination=${encodeURIComponent(dest)}`:"");
+  const title = kind==="airport"
+    ? (lg.fly==="in"?`✈️ ${esc(lg.city)} 入境接駁`:`✈️ ${esc(lg.city)} 出境接駁`)
+    : `👣 ${esc(lg.city)} → ${esc(p.legs[i+1]?p.legs[i+1].city:"下一城")}`;
+  const sum=transSummary(kind==="airport"?lg.airport:lg.toNext);
+  const trObj=(kind==="airport"?lg.airport:lg.toNext)||{};
+  const bk=trObj.booking; // 預訂狀態：'need' / 'walkup' / undefined
+  const bkLine = bk==="need" ? `<div class="bkstat need">🎫 需預訂</div>`
+               : bk==="walkup" ? `<div class="bkstat walkup">✅ 可現場買</div>` : "";
+  openSheet(`<h3>${title}</h3>
+    <div class="mini" style="margin-bottom:10px;color:var(--soft)">🗺️ 路線：${esc(hint)}</div>
+    ${bkLine}
+    <a href="${mapUrl}" target="_blank" rel="noopener" class="mapbtn" onclick="closeSheet()">🗺️ 開 Google Maps 看路線</a>
+    <button class="chip" id="askBooking" style="width:100%;margin-top:10px;padding:11px;font-size:15px;background:var(--sky-soft);color:var(--sky-deep);border-color:var(--sky)">🤖 問 AI 要不要預訂</button>
+    <div id="bkOut" class="aiout"></div>
+    <button class="chip" onclick="openTrans('${tripId}','${planId}','${legId}','${kind}')" style="width:100%;margin-top:10px;padding:11px;font-size:15px">📝 填交通資訊${sum?`（目前：${esc(sum)}）`:""}</button>
+    <div class="btns" style="margin-top:14px"><button class="cancel" onclick="closeSheet()" style="flex:1">關閉</button></div>`);
+  document.getElementById("askBooking").onclick=()=>askBooking(tripId,planId,legId,kind,origin,dest,hint);
+}
+
+/* 問 AI：這段交通要不要預訂 */
+const DEMO_BOOKING = {  // 測試模式用的範例判斷（依路線關鍵字粗略對應）
+  default:{ booking:"walkup", reason:"市區短程交通（地鐵、公車、計程車）通常可現場購票或上車付費，不需預訂。" },
+  intercity:{ booking:"need", reason:"城市間的長途巴士或火車，旺季常客滿，建議提前在官網或 App 預訂指定班次。" },
+  airport:{ booking:"walkup", reason:"機場快線、機場巴士、計程車多可現場購票，但若搭特定接駁可先確認班次。" }
+};
+async function askBooking(tripId,planId,legId,kind,origin,dest,hint){
+  const out=document.getElementById("bkOut"); if(!out) return;
+  out.innerHTML=`<div class="mini" style="color:var(--sky);margin-top:8px">🤖 AI 判斷中…</div>`;
+  const save=(booking,reason)=>{
+    const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
+    const lg=p.legs.find(x=>x.id===legId);
+    const target = kind==="airport" ? (lg.airport=lg.airport||{}) : (lg.toNext=lg.toNext||{});
+    target.booking=booking; target.bookingReason=reason;
+    saveTrips();
+    out.innerHTML=`<div class="bkresult ${booking}">${booking==="need"?"🎫 建議預訂":"✅ 可現場買"}<div class="mini" style="margin-top:3px;font-weight:400">${esc(reason)}</div></div>`;
+    // 不整頁重繪，避免關掉選單；卡片下次開會更新
+  };
+
+  if(DEMO_MODE){
+    setTimeout(()=>{
+      const key = kind==="airport"?"airport":"intercity";
+      const d=DEMO_BOOKING[key]||DEMO_BOOKING.default;
+      save(d.booking,d.reason);
+    },400);
+    return;
+  }
+  const k=getGeminiKey();
+  if(!k){ out.innerHTML=`<div class="mini" style="color:var(--err);margin-top:8px">尚未設定 AI 金鑰</div>`; return; }
+  const prompt=`旅遊交通問題：從「${origin||"市區"}」到「${dest||"目的地"}」（${hint}）。\n`+
+    `這段最常見的交通方式，是「可以現場購票（walkup）」還是「建議提前預訂（need）」？\n`+
+    `只回傳 JSON：{"booking":"need 或 walkup","reason":"一句話原因"}。繁體中文。`;
+  try{
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent`;
+    const res=await fetch(url,{method:"POST",
+      headers:{"Content-Type":"application/json","X-goog-api-key":k},
+      body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{responseMimeType:"application/json"}})});
+    if(!res.ok){ throw new Error("HTTP "+res.status); }
+    const data=await res.json();
+    let text=data?.candidates?.[0]?.content?.parts?.map(p=>p.text).join("")||"";
+    const parsed=JSON.parse(text.replace(/```json|```/g,"").trim());
+    save(parsed.booking==="need"?"need":"walkup", parsed.reason||"");
+  }catch(e){
+    out.innerHTML=`<div class="mini" style="color:var(--err);margin-top:8px">AI 判斷失敗：${esc(String(e.message||e))}</div>`;
+  }
+}
+
+/* 交通表單（純填方式+時間+費用，地圖由 openTransMenu 負責） */
 function openTrans(tripId,planId,legId,kind){
   const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
   const lg=p.legs.find(x=>x.id===legId);
@@ -975,17 +1090,7 @@ function openTrans(tripId,planId,legId,kind){
     ? `✈️ ${esc(lg.city)} 機場接駁`
     : `👣 ${esc(lg.city)} → ${esc(p.legs[i+1]?p.legs[i+1].city:"下一城")}`;
   const ph = kind==="airport" ? "例：機場快線、計程車進市區" : "例：巴士、火車、自駕";
-  // Google Maps 路線：機場接駁=現在位置→本段飯店；城市間=本段飯店→下一段飯店
-  let origin, dest;
-  if(kind==="airport"){ origin=""; dest=hotelTarget(lg); }  // origin 留空 = 現在位置
-  else { origin=hotelTarget(lg); dest=hotelTarget(p.legs[i+1]||lg); }
-  const mapUrl=`https://www.google.com/maps/dir/?api=1`+
-    (origin?`&origin=${encodeURIComponent(origin)}`:"")+
-    `&destination=${encodeURIComponent(dest)}`;
-  const mapHint = kind==="airport" ? "現在位置 → "+esc(dest) : esc(origin)+" → "+esc(dest);
   openSheet(`<h3>${title}</h3>
-    <a href="${mapUrl}" target="_blank" rel="noopener" class="mapbtn">🗺️ 用 Google Maps 查路線</a>
-    <div class="mini" style="margin:4px 0 2px;color:var(--soft)">${mapHint}</div>
     <label>交通方式</label><input id="f_mode" value="${esc(tr.mode||"")}" placeholder="${ph}">
     <div style="display:flex;gap:10px">
       <div style="flex:1"><label>時間</label><input id="f_time" value="${esc(tr.time||"")}" placeholder="例：2 小時"></div>
