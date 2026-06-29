@@ -163,16 +163,35 @@
   .routebox{background:linear-gradient(135deg,var(--sun-soft),var(--card2));border:2px solid var(--sun);
     border-radius:18px;padding:16px;margin-bottom:14px;}
   .routestop{display:flex;align-items:center;gap:10px;}
-  .routedot{font-size:22px;}
   .routecity{font-size:15px;}
-  .routestep{font-size:18px;margin:2px 0 2px 4px;opacity:.7;}
-  .flytag{background:var(--sky);color:#fff;font-size:11px;padding:2px 8px;border-radius:9px;margin-left:6px;font-weight:700;}
+  .rc-green{color:var(--ok);}
+  .needtk{font-size:11px;color:var(--err);font-weight:700;background:#fbeae7;padding:1px 7px;border-radius:8px;}
+
+  /* 定案路線 方向A */
+  .routeflow{margin-top:4px;}
+  .flowcity{display:flex;align-items:flex-start;gap:9px;cursor:pointer;padding:3px 0;}
+  .dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;margin-top:5px;}
+  .dot.g{background:var(--ok);}
+  .dot.r{background:var(--err);box-shadow:0 0 0 3px #fbeae7;}
+  .fcbody{flex:1;}
+  .fcline1{font-size:15px;}
+  .fcname{font-weight:800;}
+  .fcmeta{font-size:12px;color:var(--soft);font-weight:500;}
+  .fchotel{font-size:12px;color:var(--ok);font-weight:600;margin-top:1px;}
+  .fchotel.none{color:var(--err);}
+  .flowstep{display:flex;align-items:center;gap:8px;margin-left:3px;}
+  .wavy.ok ellipse,.wavy.ok circle{fill:var(--ok);}
+  .wavy.need ellipse,.wavy.need circle{fill:#33424d;}
 
   /* 方案橫向滑動 */
   .planscroll{display:flex;gap:12px;overflow-x:auto;padding:4px 2px 12px;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;}
   .plancard{flex:0 0 80%;max-width:80%;scroll-snap-align:center;background:var(--card);
     border:2px solid var(--line);border-radius:18px;padding:14px;}
   .plancard.decided{border-color:var(--sun);background:#fffaf3;}
+  .plancard.addcard{flex:0 0 44%;max-width:44%;border-style:dashed;border-color:var(--sky);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;background:#f4fafd;min-height:160px;}
+  .addcard-inner{text-align:center;color:var(--sky-deep);font-weight:800;font-size:15px;}
+  .addcard-plus{font-size:34px;line-height:1;margin-bottom:6px;}
   .leg{display:flex;align-items:center;gap:6px;padding:5px 0;}
   .leg+.footstep{margin-top:-2px;}
   .legmove{display:flex;flex-direction:column;gap:1px;}
@@ -214,6 +233,31 @@
   .bktag.walkup{background:#e7f3ec;color:var(--ok);}
   .checkok{margin-top:10px;background:#e7f3ec;color:var(--ok);border-radius:10px;padding:8px 10px;font-size:13px;font-weight:700;}
   .checkwarn{margin-top:10px;background:#fbeae7;color:var(--err);border-radius:10px;padding:8px 10px;font-size:13px;font-weight:700;}
+  .donebtn{width:100%;margin-top:14px;padding:14px;border-radius:16px;border:none;
+    background:var(--sun);color:#fff;font-size:16px;font-weight:800;cursor:pointer;}
+  .spotcard{background:var(--card);border:2px solid var(--line);border-radius:18px;padding:14px;margin-bottom:12px;}
+  .spothead{font-weight:800;font-size:16px;color:var(--sky-deep);}
+  .phasetabs{display:flex;gap:6px;margin-bottom:14px;}
+  .phasetab{flex:1;padding:9px 4px;border:2px solid var(--line);border-radius:13px;background:var(--card);
+    color:var(--soft);font-size:12px;font-weight:700;cursor:pointer;text-align:center;}
+  .phasetab.cur{background:var(--sky);color:#fff;border-color:var(--sky);}
+  .phasetab.lock{opacity:.5;}
+  .cfm{background:var(--card);color:var(--ok);border-color:var(--ok)!important;font-weight:800;}
+  .cfm.done{background:var(--ok);color:#fff;}
+  .daycard{background:var(--card);border:2px solid var(--line);border-radius:18px;padding:14px;margin-bottom:12px;}
+  .dayhead{font-weight:800;font-size:18px;color:var(--sky-deep);border-bottom:2px solid var(--card2);padding-bottom:6px;margin-bottom:8px;}
+  .dayweek{font-size:13px;color:var(--soft);font-weight:600;margin-left:4px;}
+  .daymove{font-size:13px;color:var(--sky-deep);font-weight:700;background:var(--sky-soft);border-radius:10px;padding:6px 10px;margin-bottom:6px;}
+  .dayair{font-size:13px;color:var(--sun);font-weight:700;background:var(--sun-soft);border-radius:10px;padding:6px 10px;margin-bottom:6px;}
+  .daycity{font-size:14px;font-weight:700;margin-bottom:6px;}
+  .dayspots{font-size:13px;line-height:1.7;white-space:normal;}
+  .spotchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+  .spotchip{background:var(--card);border:2px solid var(--line);border-radius:13px;padding:6px 11px;
+    font-size:13px;color:var(--ink);font-weight:600;cursor:pointer;}
+  .spotchip.on{background:var(--sky-soft);border-color:var(--sky);color:var(--sky-deep);}
+  .spotchip.custom{border-color:var(--sun);}
+  .spotchip.custom.hasurl{border-color:var(--ok);color:var(--ok);}
+  .spotchip.custom.on{background:var(--sky-soft);border-color:var(--sky);color:var(--sky-deep);}
 </style>
 </head>
 <body>
@@ -253,6 +297,7 @@ let homeData = null;           // 從居家 app 讀來的快照（互讀）
 
 let view = "trip";
 let tripNav = "list";          // 模擬行程頁內部導覽：list=旅程列表 / detail=某趟旅程的方案
+let tripPhase = "plan";        // plan=交通與住宿規劃 / spots=景點規劃 / sim=模擬行程
 let openTripId = null;         // 進入 detail 時的旅程 id
 let tripDayFilter = "全部";
 let packCatFilter = "全部";
@@ -332,7 +377,8 @@ function render(){
   const fab=document.getElementById("fab");
   fab.style.display="block";
   if(view==="trip"){
-    fab.textContent = tripNav==="detail" ? "＋ 新增方案" : "＋ 新增旅程";
+    if(tripNav==="detail"){ fab.style.display="none"; }  // 新增方案改到卡片列右方
+    else { fab.textContent="＋ 新增旅程"; }
   }else{
     fab.textContent = view==="memo" ? "＋ 寫一則回憶"
                     : view==="pack" ? "＋ 新增物品"
@@ -376,12 +422,47 @@ function renderTripList(){
 }
 
 /* ----- 模擬行程：方案比較 + 定案路線 ----- */
+/* 三大部分的頂部步驟列（可來回切） */
+function phaseTabs(t){
+  const decided=t.plans.find(p=>p.id===t.decidedPlan);
+  const hasDecided = decided && (decided.legs||[]).length;
+  // 全部城市都確定才能進第三部分
+  let allConfirmed=false;
+  if(hasDecided){
+    allConfirmed = decided.legs.every(lg=>t.spots&&t.spots[lg.id]&&t.spots[lg.id].confirmed);
+  }
+  const steps=[
+    {k:"plan", n:"1 交通與住宿", on:true},
+    {k:"spots", n:"2 景點規劃", on:hasDecided},
+    {k:"sim", n:"3 模擬行程", on:allConfirmed}
+  ];
+  return `<div class="phasetabs">${steps.map(s=>
+    `<button class="phasetab ${tripPhase===s.k?'cur':''} ${s.on?'':'lock'}" data-phase="${s.k}">${s.n}${s.on?'':' 🔒'}</button>`
+  ).join("")}</div>`;
+}
+function bindPhaseTabs(t){
+  document.querySelectorAll('[data-phase]').forEach(b=>b.onclick=()=>{
+    if(b.classList.contains("lock")) {
+      const k=b.dataset.phase;
+      if(k==="spots") alert("請先在「交通與住宿規劃」設定一個方案為定案。");
+      else if(k==="sim") alert("請先在「景點規劃」把每個城市都按下「確定」。");
+      return;
+    }
+    tripPhase=b.dataset.phase; render();
+  });
+}
+
 function renderTripDetail(){
   const main=document.getElementById("main");
   const t=trips.find(x=>x.id===openTripId);
   if(!t){ tripNav="list"; render(); return; }
   if(!Array.isArray(t.plans)) t.plans=[];
   if(!Array.isArray(t.wishCities)) t.wishCities=[];
+
+  // 第二部分：景點規劃
+  if(tripPhase==="spots"){ renderSpots(t); return; }
+  // 第三部分：模擬行程
+  if(tripPhase==="sim"){ renderSim(t); return; }
 
   // 頂部：旅程資訊 + 返回
   let html=`<div class="card" style="background:var(--card2);border:none;margin-bottom:14px">
@@ -395,6 +476,7 @@ function renderTripDetail(){
         <button class="chip" data-backlist="1">‹ 返回列表</button>
       </div>
     </div>`;
+  html+=phaseTabs(t);
 
   // 步驟一：想去的城市
   html+=`<div class="wishbox">
@@ -410,43 +492,51 @@ function renderTripDetail(){
       <div id="aiOut" class="aiout"></div>
     </div>`;
 
-  // 步驟三：方案比較（左右滑動）
+  // 步驟三：方案比較（左右滑動，最右是新增方案卡）
   html+=`<div class="countLine">${t.plans.length} 個方案，左右滑動比較</div>`;
-  if(!t.plans.length){
-    html+=`<div class="empty"><div class="big">還沒有方案</div>按下方「＋ 新增方案」排一種走法。加段時可從上面的城市清單點選。</div>`;
-  }else{
-    html+=`<div class="planscroll">`+t.plans.map(p=>planCardHTML(t,p)).join("")+`</div>`;
-  }
+  const addCard=`<div class="plancard addcard" id="addPlanCard">
+      <div class="addcard-inner"><div class="addcard-plus">＋</div><div>新增方案</div></div>
+    </div>`;
+  html+=`<div class="planscroll">`+t.plans.map(p=>planCardHTML(t,p)).join("")+addCard+`</div>`;
 
-  // 定案路線圖（編排完、選定方案後才在最下方生成）
+  // 定案路線圖（方向 A：緊湊單行 + 🔴🟢狀態點 + 蜿蜒虛線）
   const decided=t.plans.find(p=>p.id===t.decidedPlan);
   if(decided && (decided.legs||[]).length){
     const dts=computeLegDates(t,decided.legs);
     html+=`<div class="routebox">
-        <div class="aihead" style="color:var(--sun);margin-bottom:10px">🧭 定案路線：${esc(decided.name)}</div>`;
+        <div class="aihead" style="color:var(--sun);margin-bottom:10px">🧭 定案路線：${esc(decided.name)}</div>
+        <div class="routeflow">`;
     decided.legs.forEach((lg,i)=>{
-      const fly = lg.fly==="in"?`<span class="flytag">入</span>`
-                : lg.fly==="out"?`<span class="flytag">出</span>`:"";
       const dt=dts[i];
       const dateStr = dt ? `${fmtMDObj(dt.start)}–${fmtMDObj(dt.end)}` : "";
-      const hotelInfo = lg.hotel&&(lg.hotel.name||lg.hotel.addr)
-        ? `<div class="routehotel">🛏️ ${esc(lg.hotel.name||lg.hotel.addr)}</div>` : `<div class="routehotel empty">🛏️ 點此設定飯店</div>`;
-      const airBk = lg.fly&&lg.airport&&lg.airport.booking;
-      const airBkTag = airBk==="need"?` <span class="bktag need">🎫需預訂</span>`:airBk==="walkup"?` <span class="bktag walkup">✅可現場買</span>`:"";
-      html+=`<div class="routestop" data-hotel="${decided.id}|${lg.id}">
-          <div class="routedot">🏙️</div>
-          <div class="routecity"><b>${esc(lg.city)}</b> <span class="mini">${dateStr}（${lg.days||0}晚）</span> ${fly}
-            ${hotelInfo}
-            ${lg.fly&&transSummary(lg.airport)?`<div class="routetrans">✈️🚐 ${esc(transSummary(lg.airport))}${airBkTag}</div>`:(airBk?`<div class="routetrans">✈️🚐${airBkTag}</div>`:"")}
+      const hasHotel = lg.hotel&&(lg.hotel.name||lg.hotel.addr);
+      const flyTxt = lg.fly==="in"?" · 入":lg.fly==="out"?" · 出":"";
+      html+=`<div class="flowcity" data-hotel="${decided.id}|${lg.id}">
+          <span class="dot ${hasHotel?'g':'r'}"></span>
+          <div class="fcbody">
+            <div class="fcline1"><span class="fcname ${hasHotel?'rc-green':''}">${esc(lg.city)}</span> <span class="fcmeta">${dateStr} · ${lg.days||0}晚${flyTxt}</span></div>
+            ${hasHotel?`<div class="fchotel">🛏️ ${esc(lg.hotel.name||lg.hotel.addr)}</div>`:`<div class="fchotel none">🛏️ 尚未訂房</div>`}
           </div>
         </div>`;
       if(i<decided.legs.length-1){
-        const tn=transSummary(lg.toNext);
         const tnBk=lg.toNext&&lg.toNext.booking;
-        const tnBkTag=tnBk==="need"?` <span class="bktag need">🎫需預訂</span>`:tnBk==="walkup"?` <span class="bktag walkup">✅可現場買</span>`:"";
-        html+=`<div class="routestep">👣${tn?` <span class="routetrans-inline">${esc(tn)}</span>`:""}${tnBkTag}</div>`;
+        const need=tnBk==="need";
+        // 沿蜿蜒路徑交錯排列的小腳印（左右腳交替、隨曲線左右擺）
+        const prints=[
+          {x:13,y:4,r:-18},{x:19,y:11,r:12},{x:13,y:18,r:-15},{x:19,y:25,r:14}
+        ];
+        const feet=prints.map(f=>
+          `<g transform="translate(${f.x},${f.y}) rotate(${f.r})">
+             <ellipse cx="0" cy="0" rx="2" ry="3.4"/>
+             <circle cx="0" cy="-4.2" r="1.1"/>
+           </g>`).join("");
+        html+=`<div class="flowstep">
+            <svg width="32" height="32" viewBox="0 0 32 32" class="wavy ${need?'need':'ok'}">${feet}</svg>
+            ${need?`<span class="needtk">🎫 需預訂</span>`:""}
+          </div>`;
       }
     });
+    html+=`</div>`;
     // 回程航班吻合檢查
     const last=lastDayOfPlan(t,decided.legs);
     const back=t.flight&&t.flight.depBack?new Date(t.flight.depBack):null;
@@ -457,6 +547,8 @@ function renderTripDetail(){
         : `<div class="checkwarn">⚠️ 最後退房是 ${fmtMDObj(last)}，但回程班機在 ${fmtMD(t.flight.depBack)}，請檢查晚數安排</div>`;
     }
     html+=`</div>`;
+    // 進入第二部分按鈕
+    html+=`<button class="donebtn" id="toSpots">排好了！進入城市景點 →</button>`;
   }
 
   main.innerHTML=html;
@@ -464,7 +556,7 @@ function renderTripDetail(){
   const ps=main.querySelector(".planscroll");
   if(ps && window.__planScrollX!=null){ ps.scrollLeft=window.__planScrollX; }
   if(ps){ ps.addEventListener("scroll",()=>{ window.__planScrollX=ps.scrollLeft; }); }
-  main.querySelector('[data-backlist]').onclick=()=>{ tripNav="list"; openTripId=null; window.__planScrollX=null; render(); };
+  main.querySelector('[data-backlist]').onclick=()=>{ tripNav="list"; tripPhase="plan"; openTripId=null; window.__planScrollX=null; render(); };
   main.querySelector('[data-edittrip]').onclick=()=>openTrip(t.id);
   // 想去城市的事件
   document.getElementById("wishAdd").onclick=()=>openWishAdd(t.id);
@@ -472,12 +564,17 @@ function renderTripDetail(){
     t.wishCities=t.wishCities.filter(c=>c!==b.dataset.wishdel); saveTrips(); render();
   });
   bindPlanCardEvents(t);
+  const addPC=document.getElementById("addPlanCard");
+  if(addPC) addPC.onclick=()=>openPlan(t.id);
   main.querySelectorAll('[data-hotel]').forEach(b=>b.onclick=()=>{
     const [pid,lid]=b.dataset.hotel.split("|");
     openHotel(t.id,pid,lid);
   });
   document.getElementById("aiGo").onclick=()=>{ if(t.wishCities.length) askAI(t); };
   document.getElementById("aiKey").onclick=()=>showKeyForm(t);
+  const toSpots=document.getElementById("toSpots");
+  if(toSpots) toSpots.onclick=()=>{ tripPhase="spots"; render(); };
+  bindPhaseTabs(t);
 }
 
 /* 交通資訊摘要（顯示在銜接點按鈕上） */
@@ -488,6 +585,360 @@ function transSummary(tr){
   if(tr.time) parts.push(tr.time);
   if(tr.cost) parts.push("$"+tr.cost);
   return parts.join(" ・ ");
+}
+
+/* ===== 第二部分：城市景點 ===== */
+function renderSpots(t){
+  const main=document.getElementById("main");
+  const decided=t.plans.find(p=>p.id===t.decidedPlan);
+  if(!decided||!(decided.legs||[]).length){
+    main.innerHTML=`<div class="empty"><div class="big">還沒有定案路線</div>請先回到模擬行程，設定一個方案為定案。</div>`;
+    return;
+  }
+  if(!t.spots) t.spots={};  // { legId: {recList:[], selected:[], route:"", extraList:[], checkedExtra:[]} }
+  const dts=computeLegDates(t,decided.legs);
+
+  let html=`<div class="card" style="background:var(--card2);border:none;margin-bottom:14px">
+      <div class="row"><div style="flex:1">
+        <div class="title">📌 景點規劃</div>
+        <div class="meta">${esc(t.dest||"")}　${fmtTripRange(t)}</div>
+      </div></div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="chip" data-backlist="1">‹ 返回列表</button>
+      </div>
+    </div>`;
+  html+=phaseTabs(t);
+
+  decided.legs.forEach((lg,i)=>{
+    const dt=dts[i];
+    const dateStr = dt ? `${fmtMDObj(dt.start)}–${fmtMDObj(dt.end)}` : "";
+    const sp=t.spots[lg.id]||{};
+    const recList=sp.recList||[];
+    const selected=sp.selected||[];
+    const extraList=sp.extraList||[];
+    const checkedExtra=sp.checkedExtra||[];
+    const customList=sp.customList||[];  // [{name,url}]
+
+    // 第一格：AI 推薦景點 + 自訂項目（可點選加入）
+    const recChips = recList.map(s=>{
+      const on=selected.includes(s);
+      return `<button class="spotchip ${on?'on':''}" data-pick="${lg.id}|${esc(s)}">${esc(s)}${on?' ✓':' ＋'}</button>`;
+    }).join("");
+    const customChips = customList.map(c=>{
+      const on=selected.includes(c.name);
+      const hasUrl=c.url&&c.url.trim();
+      return `<button class="spotchip custom ${on?'on':''} ${hasUrl?'hasurl':''}" data-pick="${lg.id}|${esc(c.name)}">📌 ${esc(c.name)}${on?' ✓':' ＋'}</button>`;
+    }).join("");
+    const recHtml = (recList.length||customList.length)
+      ? `<div class="spotchips">${recChips}${customChips}</div>`
+      : "";
+
+    // 第二格：已選景點 + 規劃 + 補充建議(可勾選)
+    const selHtml = selected.length
+      ? `<div class="mini" style="margin-bottom:6px">已選景點：${selected.map(s=>esc(s)).join("、")}</div>`
+      : `<div class="mini" style="color:var(--soft);margin-bottom:6px">先在上方推薦裡點選想去的景點</div>`;
+    const routeHtml = sp.route?`<div class="airesult">${mdLite(sp.route)}</div>`:"";
+    const extraHtml = extraList.length
+      ? `<div class="mini" style="margin:8px 0 4px;color:var(--soft)">AI 補充建議（勾選後可再生成，把它們也排進去）：</div>
+         <div class="spotchips">${extraList.map(s=>{
+            const ck=checkedExtra.includes(s);
+            return `<button class="spotchip ${ck?'on':''}" data-extra="${lg.id}|${esc(s)}">${esc(s)}${ck?' ✓':' ＋'}</button>`;
+         }).join("")}</div>`
+      : "";
+
+    html+=`<div class="spotcard">
+        <div class="spothead">🏙️ ${esc(lg.city)} <span class="mini">${dateStr} · ${lg.days||0}晚</span></div>
+
+        <div class="aibox" style="margin:10px 0 0">
+          <div class="aihead" style="font-size:14px">🤖 推薦行程・景點</div>
+          <div id="rec_${lg.id}" class="aiout">${recHtml}</div>
+          <button class="chip aispot" data-rec="${lg.id}" style="margin-top:8px;width:100%;background:var(--sky);color:#fff;border-color:var(--sky)">✨ ${recList.length?"重新推薦":"推薦這個城市的景點"}</button>
+          <button class="chip" data-custom="${lg.id}" style="margin-top:8px;width:100%;border-style:dashed;border-color:var(--sun);color:#a96a26">📌 ＋ 自己加景點／體驗（KKday、特色行程…）</button>
+        </div>
+
+        <div class="aibox" style="margin:10px 0 0">
+          <div class="aihead" style="font-size:14px">🧭 景點順序・路程規劃</div>
+          ${selHtml}
+          <div id="route_${lg.id}" class="aiout">${routeHtml}${extraHtml}</div>
+          <button class="chip aispot" data-route="${lg.id}" ${selected.length?"":"disabled"} style="margin-top:8px;width:100%;background:var(--sky-soft);color:var(--sky-deep);border-color:var(--sky)${selected.length?"":";opacity:.5"}">🧭 ${sp.route?"重新規劃":"規劃景點順序與路程"}</button>
+        </div>
+
+        <button class="chip cfm ${sp.confirmed?'done':''}" data-confirm="${lg.id}" style="margin-top:12px;width:100%;padding:12px">${sp.confirmed?"✓ 已確定（再按取消）":"確定這個城市的規劃"}</button>
+      </div>`;
+  });
+
+  // 全部城市確定後，顯示進入第三部分按鈕
+  const allDone = decided.legs.every(lg=>t.spots[lg.id]&&t.spots[lg.id].confirmed);
+  if(allDone){
+    html+=`<button class="donebtn" id="toSim">全部規劃完成！進入模擬行程 →</button>`;
+  } else {
+    const left=decided.legs.filter(lg=>!(t.spots[lg.id]&&t.spots[lg.id].confirmed)).length;
+    html+=`<div class="mini" style="text-align:center;color:var(--soft);margin-top:8px">還有 ${left} 個城市未確定，全部確定後可進入模擬行程</div>`;
+  }
+
+  main.innerHTML=html;
+  bindPhaseTabs(t);
+  main.querySelector('[data-backlist]').onclick=()=>{ tripNav="list"; tripPhase="plan"; openTripId=null; render(); };
+  // 第一格景點點選 → 加入/移除第二格的已選
+  main.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{
+    const [lid,spot]=b.dataset.pick.split("|");
+    togglePick(t,lid,"selected",spot); renderSpots(t);
+  });
+  // 補充建議勾選
+  main.querySelectorAll('[data-extra]').forEach(b=>b.onclick=()=>{
+    const [lid,spot]=b.dataset.extra.split("|");
+    togglePick(t,lid,"checkedExtra",spot); renderSpots(t);
+  });
+  main.querySelectorAll('[data-rec]').forEach(b=>b.onclick=()=>askSpots(t,b.dataset.rec,"rec"));
+  main.querySelectorAll('[data-custom]').forEach(b=>b.onclick=()=>openCustomSpot(t,b.dataset.custom));
+  main.querySelectorAll('[data-route]').forEach(b=>b.onclick=()=>{
+    if(b.disabled) return; askSpots(t,b.dataset.route,"route");
+  });
+  // 每城確定
+  main.querySelectorAll('[data-confirm]').forEach(b=>b.onclick=()=>{
+    const lid=b.dataset.confirm;
+    if(!t.spots[lid]) t.spots[lid]={};
+    t.spots[lid].confirmed=!t.spots[lid].confirmed;
+    saveTrips(); renderSpots(t);
+  });
+  const toSim=document.getElementById("toSim");
+  if(toSim) toSim.onclick=()=>{ tripPhase="sim"; render(); };
+}
+/* ===== 第三部分：模擬行程（以日期為主軸，逐日攤平） ===== */
+function renderSim(t){
+  const main=document.getElementById("main");
+  const decided=t.plans.find(p=>p.id===t.decidedPlan);
+  if(!decided||!(decided.legs||[]).length){
+    main.innerHTML=`<div class="empty"><div class="big">還沒有定案路線</div>請先完成前兩個部分。</div>`;
+    return;
+  }
+  const dts=computeLegDates(t,decided.legs);
+
+  let html=`<div class="card" style="background:var(--card2);border:none;margin-bottom:14px">
+      <div class="row"><div style="flex:1">
+        <div class="title">📅 模擬行程</div>
+        <div class="meta">${esc(t.dest||"")}　${fmtTripRange(t)}${tripDays(t)?`　${tripDays(t)}`:""}</div>
+        ${flightLine(t)}
+      </div></div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="chip" data-backlist="1">‹ 返回列表</button>
+      </div>
+    </div>`;
+  html+=phaseTabs(t);
+
+  // 建立逐日清單
+  const days=buildDailyPlan(t,decided,dts);
+  days.forEach(d=>{
+    html+=`<div class="daycard">
+        <div class="dayhead">${d.dateLabel} <span class="dayweek">${d.weekday}</span></div>`;
+    // 換城市那天
+    if(d.move){
+      html+=`<div class="daymove">🚆 從 ${esc(d.move.from)} → ${esc(d.move.to)}${d.move.trans?`（${esc(d.move.trans)}）`:""}${d.move.bk?` ${d.move.bk}`:""}</div>`;
+    }
+    // 機場進出
+    if(d.airport){
+      html+=`<div class="dayair">✈️ ${esc(d.airport)}</div>`;
+    }
+    // 當天所在城市 + 飯店
+    html+=`<div class="daycity">📍 ${esc(d.city)}${d.hotel?`　🛏️ ${esc(d.hotel)}`:""}</div>`;
+    // 當天景點
+    if(d.spots){
+      html+=`<div class="dayspots">${mdLite(d.spots)}</div>`;
+    } else {
+      html+=`<div class="mini" style="color:var(--soft);margin-top:4px">這天還沒有景點規劃</div>`;
+    }
+    html+=`</div>`;
+  });
+
+  main.innerHTML=html;
+  bindPhaseTabs(t);
+  main.querySelector('[data-backlist]').onclick=()=>{ tripNav="list"; tripPhase="plan"; openTripId=null; render(); };
+}
+
+/* 把定案路線 + 景點規劃，攤平成逐日清單 */
+function buildDailyPlan(t,decided,dts){
+  const weekdays=["日","一","二","三","四","五","六"];
+  const days=[];
+  decided.legs.forEach((lg,li)=>{
+    const dt=dts[li]; if(!dt) return;
+    const sp=(t.spots&&t.spots[lg.id])||{};
+    const routeDays=splitRouteByDay(sp.route, lg.days||1);  // 把該段景點文字按天拆
+    const hotel = lg.hotel&&(lg.hotel.name||lg.hotel.addr) ? (lg.hotel.name||lg.hotel.addr) : "";
+    const nights=Math.max(1,Number(lg.days)||1);
+    for(let n=0;n<nights;n++){
+      const date=new Date(dt.start); date.setDate(date.getDate()+n);
+      const dayObj={
+        date,
+        dateLabel:`${date.getMonth()+1}/${date.getDate()}`,
+        weekday:"週"+weekdays[date.getDay()],
+        city:lg.city,
+        hotel,
+        spots:routeDays[n]||routeDays[0]||"",
+        move:null, airport:null
+      };
+      // 換城市那天（這段第一天，且不是整趟第一段）
+      if(n===0 && li>0){
+        const prev=decided.legs[li-1];
+        dayObj.move={ from:prev.city, to:lg.city,
+          trans:transSummary(prev.toNext),
+          bk: prev.toNext&&prev.toNext.booking==="need"?"🎫需預訂":prev.toNext&&prev.toNext.booking==="walkup"?"💁現場購票":"" };
+      }
+      // 機場進出
+      if(li===0 && n===0 && lg.fly==="in") dayObj.airport=`抵達 ${lg.city} 機場，前往市區`;
+      if(li===decided.legs.length-1 && n===nights-1 && lg.fly==="out") dayObj.airport=`前往 ${lg.city} 機場，準備返程`;
+      days.push(dayObj);
+    }
+  });
+  return days;
+}
+/* 把「第1天…第2天…」的景點規劃文字，按天拆成陣列 */
+function splitRouteByDay(route,nights){
+  if(!route) return [];
+  // 以「第 N 天」當分隔
+  const parts=route.split(/(?=第\s*\d+\s*天)/);
+  if(parts.length>=2) return parts.map(s=>s.trim()).filter(Boolean);
+  // 沒有明確分天就整塊放第一天
+  return [route];
+}
+
+function togglePick(t,legId,field,spot){
+  if(!t.spots[legId]) t.spots[legId]={};
+  const arr=t.spots[legId][field]||[];
+  const idx=arr.indexOf(spot);
+  if(idx>=0) arr.splice(idx,1); else arr.push(spot);
+  t.spots[legId][field]=arr; saveTrips();
+}
+
+/* 自訂景點/體驗表單（名稱 + 選填參考網址） */
+function openCustomSpot(t,legId){
+  openSheet(`<h3>📌 自己加景點／體驗</h3>
+    <div class="mini" style="margin-bottom:8px;color:var(--soft)">KKday 一日遊、啤酒浴等 AI 沒推薦、你自己查到的都可以加。</div>
+    <label>名稱</label><input id="f_csname" placeholder="例：布拉格啤酒浴" autocomplete="off">
+    <label>參考網址（選填）</label><input id="f_csurl" placeholder="貼上 KKday、官網等連結" autocomplete="off">
+    <div class="btns"><button class="cancel" onclick="closeSheet()">取消</button>
+      <button class="save" onclick="saveCustomSpot('${t.id}','${legId}')">加入</button></div>`);
+  setTimeout(()=>{ const el=document.getElementById("f_csname"); if(el) el.focus(); },100);
+}
+function saveCustomSpot(tripId,legId){
+  const t=trips.find(x=>x.id===tripId);
+  if(!t.spots[legId]) t.spots[legId]={};
+  if(!t.spots[legId].customList) t.spots[legId].customList=[];
+  const name=document.getElementById("f_csname").value.trim();
+  if(!name){ alert("請輸入名稱"); return; }
+  const url=document.getElementById("f_csurl").value.trim();
+  t.spots[legId].customList.push({name,url});
+  saveTrips(); closeSheet(); renderSpots(t);
+}
+
+/* 第二部分 AI：rec=推薦景點清單 / route=用選的景點排路程 */
+// 第二部分範例：依城市給真實景點（測試模式用）
+const DEMO_CITY_SPOTS = {
+  "布拉格":{ rec:["布拉格城堡","查理大橋","舊城廣場與天文鐘","聖維特大教堂","黃金巷","列儂牆","跳舞房子","佩特任瞭望塔","猶太區"],
+    extra:["維謝赫拉德城堡","卡夫卡博物館"] },
+  "卡羅維瓦利":{ rec:["溫泉迴廊","磨坊迴廊","古堡溫泉塔","黛安娜瞭望塔","聖瑪麗瑪達肋納教堂","溫泉餅嚐鮮"],
+    extra:["普普大飯店","莫瑟玻璃工廠"] },
+  "庫倫諾夫":{ rec:["庫倫洛夫城堡","彩繪塔","城堡花園","老城廣場","伏爾塔瓦河泛舟","聖維特教堂"],
+    extra:["艾貢席勒美術館","迴轉劇場"] }
+};
+const DEMO_REC_FALLBACK = ["主要地標","老城區","河岸散步","當地市集","觀景台"];
+const DEMO_EXTRA_FALLBACK = ["在地咖啡館","特色博物館"];
+/* 算這段每日行程的起終點脈絡（給第二格 AI 用） */
+function legDayContext(t,legId){
+  const decided=t.plans.find(p=>p.id===t.decidedPlan);
+  const lg=decided.legs.find(x=>x.id===legId);
+  const idx=decided.legs.findIndex(x=>x.id===legId);
+  const nights=Math.max(1,Number(lg.days)||1);
+  const hotel = (lg.hotel&&(lg.hotel.addr||lg.hotel.name)) ? (lg.hotel.addr||lg.hotel.name) : null;
+  const airport = (t.flight&&t.flight.airline)?`${lg.city} 國際機場`:`${lg.city} 國際機場`;
+  const isFirst = lg.fly==="in";   // 整趟第一段（入境）
+  const isLast  = lg.fly==="out";  // 整趟最後一段（出境）
+  let lines=[];
+  for(let d=1; d<=nights; d++){
+    let from=hotel, to=hotel, note="";
+    if(isFirst && d===1){ from=airport; note="（第一天從機場入境）"; }
+    if(isLast && d===nights){ to=airport; note="（最後一天前往機場出境）"; }
+    lines.push(`第 ${d} 天：從「${from||lg.city}」出發，傍晚回到「${to||lg.city}」${note}`);
+  }
+  return { hotel, nights, lines };
+}
+
+async function askSpots(t,legId,kind){
+  const out=document.getElementById((kind==="rec"?"rec_":"route_")+legId);
+  if(!out) return;
+  const decided=t.plans.find(p=>p.id===t.decidedPlan);
+  const lg=decided.legs.find(x=>x.id===legId);
+  if(!t.spots[legId]) t.spots[legId]={};
+  const sp=t.spots[legId];
+  out.innerHTML=`<div class="mini" style="color:var(--sky)">✨ AI 規劃中…</div>`;
+
+  if(DEMO_MODE){
+    if(kind==="route"){
+      const lgCheck=decided.legs.find(x=>x.id===legId);
+      if(!(lgCheck.hotel&&(lgCheck.hotel.addr||lgCheck.hotel.name))){
+        out.innerHTML=`<div class="mini" style="color:var(--err)">⚠️ 這段還沒設定飯店。請先回模擬行程點這個城市設定飯店，行程才能正確從飯店出發、回飯店。</div>`;
+        return;
+      }
+    }
+    setTimeout(()=>{
+      const cityData=DEMO_CITY_SPOTS[lg.city];
+      if(kind==="rec"){
+        sp.recList=(cityData?cityData.rec:DEMO_REC_FALLBACK).slice(); saveTrips(); renderSpots(t);
+      } else {
+        const ctx=legDayContext(t,legId);
+        const chosen=[...(sp.selected||[]),...(sp.checkedExtra||[])];
+        const lgNow=decided.legs.find(x=>x.id===legId);
+        sp.route=ctx.lines.map((ln,di)=>{
+          const endAir = (di===ctx.lines.length-1 && lgNow.fly==="out");
+          const startAir = (di===0 && lgNow.fly==="in");
+          const picks=chosen.length?chosen:(cityData?cityData.rec.slice(0,3):["主要景點"]);
+          const dayPicks=picks.slice(di*2,di*2+2);
+          const showPicks=dayPicks.length?dayPicks:picks.slice(0,2);
+          return `${ln}\n　• 上午：${showPicks[0]||"景點"}\n　• 下午：${showPicks[1]||"周邊散步"}\n　• 傍晚：返回${endAir?"機場準備出境":"飯店"}`;
+        }).join("\n\n");
+        sp.extraList=(cityData?cityData.extra:DEMO_EXTRA_FALLBACK).slice(); saveTrips(); renderSpots(t);
+      }
+    },400);
+    return;
+  }
+  const key=getGeminiKey();
+  if(!key){ showKeyForm(t); return; }
+  try{
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent`;
+    if(kind==="rec"){
+      const prompt=`我在「${lg.city}」停留 ${lg.days} 晚。請推薦這城市值得去的景點，只回傳 JSON：{"spots":["景點1","景點2"]}，6-10 個，繁體中文。`;
+      const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json","X-goog-api-key":key},
+        body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{responseMimeType:"application/json"}})});
+      if(!res.ok) throw new Error("HTTP "+res.status);
+      const data=await res.json();
+      const text=data?.candidates?.[0]?.content?.parts?.map(p=>p.text).join("")||"";
+      const parsed=JSON.parse(text.replace(/```json|```/g,"").trim());
+      sp.recList=Array.isArray(parsed.spots)?parsed.spots:[]; saveTrips(); renderSpots(t);
+    } else {
+      // 飯店防呆：這段沒設飯店就提醒先去設定
+      const lgCheck=decided.legs.find(x=>x.id===legId);
+      if(!(lgCheck.hotel&&(lgCheck.hotel.addr||lgCheck.hotel.name))){
+        out.innerHTML=`<div class="mini" style="color:var(--err)">⚠️ 這段還沒設定飯店。請先回模擬行程點這個城市設定飯店，行程才能正確從飯店出發、回飯店。</div>`;
+        return;
+      }
+      const chosen=[...(sp.selected||[]),...(sp.checkedExtra||[])];
+      const ctx=legDayContext(t,legId);
+      const prompt=`我在「${lg.city}」住 ${ctx.nights} 晚（飯店：${ctx.hotel}），想去這些景點：${chosen.join("、")}。\n`+
+        `請把行程「逐日」安排（共 ${ctx.nights} 天），每天必須符合以下起訖點：\n${ctx.lines.join("\n")}\n`+
+        `每天從起點出發、傍晚回到終點，安排順暢的景點順序與移動方式、大約時間。\n`+
+        `另外補充建議 2-3 個附近值得順遊、但我還沒列的景點。\n`+
+        `只回傳 JSON：{"route":"逐日規劃文字(用換行分天)","extra":["補充景點"]}。繁體中文。`;
+      const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json","X-goog-api-key":key},
+        body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{responseMimeType:"application/json"}})});
+      if(!res.ok) throw new Error("HTTP "+res.status);
+      const data=await res.json();
+      const text=data?.candidates?.[0]?.content?.parts?.map(p=>p.text).join("")||"";
+      const parsed=JSON.parse(text.replace(/```json|```/g,"").trim());
+      sp.route=parsed.route||""; sp.extraList=Array.isArray(parsed.extra)?parsed.extra:[];
+      saveTrips(); renderSpots(t);
+    }
+  }catch(e){
+    out.innerHTML=`<div class="mini" style="color:var(--err)">AI 失敗：${esc(String(e.message||e))}</div>`;
+  }
 }
 
 /* 單張方案卡 HTML */
@@ -524,7 +975,7 @@ function planCardHTML(t,p){
     if(i<legs.length-1){
       const hasT=transSummary(lg.toNext);
       const bk=lg.toNext&&lg.toNext.booking;
-      const bkIcon=bk==="need"?" 🎫":bk==="walkup"?" ✅":"";
+      const bkIcon=bk==="need"?" 🎫":bk==="walkup"?" 💁":"";
       block+=`<div class="footstep"><button class="footbtn ${hasT||bk?'hastrans':''}" data-footmenu="${p.id}|${lg.id}" title="城市間交通">👣${hasT?' 🚌':''}${bkIcon}</button></div>`;
     }
     return block;
@@ -939,7 +1390,7 @@ function saveTrip(id){
 function delTrip(id){
   if(!confirm("確定刪除整趟旅程（含所有方案）？")) return;
   trips=trips.filter(x=>x.id!==id); saveTrips(); closeSheet();
-  tripNav="list"; openTripId=null; render();
+  tripNav="list"; tripPhase="plan"; openTripId=null; render();
 }
 
 /* 方案表單（只有名稱） */
@@ -965,12 +1416,23 @@ function delPlan(tripId,planId){
   t.plans=(t.plans||[]).filter(x=>x.id!==planId); saveTrips(); closeSheet(); render();
 }
 
-/* 飯店表單（定案路線城市點選後編輯，存名稱+地址） */
+/* 飯店表單（點城市編輯，存名稱+地址；未訂房可開訂房平台） */
 function openHotel(tripId,planId,legId){
   const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
   const lg=p.legs.find(x=>x.id===legId);
   const h=lg.hotel||{name:"",addr:""};
-  openSheet(`<h3>🛏️ ${esc(lg.city)} 的飯店</h3>
+  // 算這段的入住/退房日期（給訂房平台帶入）
+  const i=p.legs.findIndex(x=>x.id===legId);
+  const dts=computeLegDates(t,p.legs);
+  const dt=dts[i];
+  const ci = dt? isoDate(dt.start):"";
+  const co = dt? isoDate(dt.end):"";
+  const city=lg.city;
+  const platforms=hotelPlatforms(city,ci,co);
+  const dateNote = (ci&&co)?`入住 ${fmtMDObj(dt.start)}、退房 ${fmtMDObj(dt.end)}`:"日期未定";
+  openSheet(`<h3>🛏️ ${esc(city)} 的飯店</h3>
+    <div class="mini" style="margin-bottom:8px;color:var(--soft)">還沒訂房？用下面平台找（已帶入 ${esc(city)}・${dateNote}）：</div>
+    <div class="chip-row" style="margin-bottom:14px">${platforms}</div>
     <label>飯店名稱</label><input id="f_hname" value="${esc(h.name||"")}" placeholder="例：布拉格洲際酒店">
     <label>地址</label><input id="f_haddr" value="${esc(h.addr||"")}" placeholder="貼上飯店地址，導航更精準">
     <div class="mini" style="margin-top:6px;color:var(--soft)">填了地址後，交通導航會直接帶你到這間飯店。</div>
@@ -978,6 +1440,18 @@ function openHotel(tripId,planId,legId){
       <button class="save" onclick="saveHotel('${tripId}','${planId}','${legId}')">儲存</button></div>
     ${(h.name||h.addr)?`<button class="del" onclick="clearHotel('${tripId}','${planId}','${legId}')">清除飯店資訊</button>`:""}`);
 }
+// 四大訂房平台連結（帶入城市與入住退房日期）
+function hotelPlatforms(city,ci,co){
+  const c=encodeURIComponent(city);
+  const list=[
+    {name:"Booking", url:`https://www.booking.com/searchresults.html?ss=${c}${ci?`&checkin=${ci}`:""}${co?`&checkout=${co}`:""}`},
+    {name:"Agoda", url:`https://www.agoda.com/search?city=${c}${ci?`&checkIn=${ci}`:""}${co?`&checkOut=${co}`:""}`},
+    {name:"Hotels.com", url:`https://www.google.com/search?q=${encodeURIComponent("Hotels.com "+city+" "+ci+" "+co)}`},
+    {name:"Trip.com", url:`https://www.google.com/search?q=${encodeURIComponent("Trip.com 訂房 "+city+" "+ci+" "+co)}`}
+  ];
+  return list.map(p=>`<a class="chip" href="${p.url}" target="_blank" rel="noopener" style="text-decoration:none">🏨 ${p.name}</a>`).join("");
+}
+function isoDate(d){ const p=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
 function saveHotel(tripId,planId,legId){
   const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
   const lg=p.legs.find(x=>x.id===legId);
@@ -1020,8 +1494,17 @@ function openTransMenu(tripId,planId,legId,kind){
   const sum=transSummary(kind==="airport"?lg.airport:lg.toNext);
   const trObj=(kind==="airport"?lg.airport:lg.toNext)||{};
   const bk=trObj.booking; // 預訂狀態：'need' / 'walkup' / undefined
-  const bkLine = bk==="need" ? `<div class="bkstat need">🎫 需預訂</div>`
-               : bk==="walkup" ? `<div class="bkstat walkup">✅ 可現場買</div>` : "";
+  let bkLine="";
+  if(bk==="need"){
+    bkLine=`<div class="bkstat need">🎫 需預訂${trObj.bookingReason?`<div class="mini" style="margin-top:2px;font-weight:400">${esc(trObj.bookingReason)}</div>`:""}</div>`;
+    if(Array.isArray(trObj.platforms)&&trObj.platforms.length){
+      bkLine+=`<div class="mini" style="margin:0 0 4px;color:var(--soft)">購票平台（點選開 Google 搜尋官網）：</div>
+        <div class="chip-row" style="margin-bottom:10px">${trObj.platforms.map(pf=>
+          `<a class="chip" href="https://www.google.com/search?q=${encodeURIComponent(pf+" "+(origin||"")+" "+(dest||""))}" target="_blank" rel="noopener" style="text-decoration:none">🎫 ${esc(pf)}</a>`).join("")}</div>`;
+    }
+  } else if(bk==="walkup"){
+    bkLine=`<div class="bkstat walkup">💁 現場購票${trObj.bookingReason?`<div class="mini" style="margin-top:2px;font-weight:400">${esc(trObj.bookingReason)}</div>`:""}</div>`;
+  }
   openSheet(`<h3>${title}</h3>
     <div class="mini" style="margin-bottom:10px;color:var(--soft)">🗺️ 路線：${esc(hint)}</div>
     ${bkLine}
@@ -1034,29 +1517,36 @@ function openTransMenu(tripId,planId,legId,kind){
 }
 
 /* 問 AI：這段交通要不要預訂 */
-const DEMO_BOOKING = {  // 測試模式用的範例判斷（依路線關鍵字粗略對應）
-  default:{ booking:"walkup", reason:"市區短程交通（地鐵、公車、計程車）通常可現場購票或上車付費，不需預訂。" },
-  intercity:{ booking:"need", reason:"城市間的長途巴士或火車，旺季常客滿，建議提前在官網或 App 預訂指定班次。" },
-  airport:{ booking:"walkup", reason:"機場快線、機場巴士、計程車多可現場購票，但若搭特定接駁可先確認班次。" }
+const DEMO_BOOKING = {  // 測試模式用的範例判斷
+  default:{ booking:"walkup", reason:"市區短程交通（地鐵、公車、計程車）通常可現場購票或上車付費，不需預訂。", platforms:[] },
+  intercity:{ booking:"need", reason:"城市間的長途巴士或火車，旺季常客滿，建議提前在官網或 App 預訂指定班次。",
+    platforms:["RegioJet","FlixBus","捷克國鐵 ČD"] },
+  airport:{ booking:"walkup", reason:"機場快線、機場巴士、計程車多可現場購票。", platforms:[] }
 };
 async function askBooking(tripId,planId,legId,kind,origin,dest,hint){
   const out=document.getElementById("bkOut"); if(!out) return;
   out.innerHTML=`<div class="mini" style="color:var(--sky);margin-top:8px">🤖 AI 判斷中…</div>`;
-  const save=(booking,reason)=>{
+  const save=(booking,reason,platforms)=>{
     const t=trips.find(x=>x.id===tripId); const p=t.plans.find(x=>x.id===planId);
     const lg=p.legs.find(x=>x.id===legId);
     const target = kind==="airport" ? (lg.airport=lg.airport||{}) : (lg.toNext=lg.toNext||{});
     target.booking=booking; target.bookingReason=reason;
+    target.platforms=Array.isArray(platforms)?platforms:[];
     saveTrips();
-    out.innerHTML=`<div class="bkresult ${booking}">${booking==="need"?"🎫 建議預訂":"✅ 可現場買"}<div class="mini" style="margin-top:3px;font-weight:400">${esc(reason)}</div></div>`;
-    // 不整頁重繪，避免關掉選單；卡片下次開會更新
+    let html=`<div class="bkresult ${booking}">${booking==="need"?"🎫 建議預訂":"💁 現場購票"}<div class="mini" style="margin-top:3px;font-weight:400">${esc(reason)}</div></div>`;
+    if(booking==="need" && target.platforms.length){
+      html+=`<div class="mini" style="margin:8px 0 4px;color:var(--soft)">推薦購票平台（點選開 Google 搜尋官網）：</div>
+        <div class="chip-row">${target.platforms.map(pf=>
+          `<a class="chip" href="https://www.google.com/search?q=${encodeURIComponent(pf+" "+(origin||"")+" "+(dest||""))}" target="_blank" rel="noopener" style="text-decoration:none">🎫 ${esc(pf)}</a>`).join("")}</div>`;
+    }
+    out.innerHTML=html;
   };
 
   if(DEMO_MODE){
     setTimeout(()=>{
       const key = kind==="airport"?"airport":"intercity";
       const d=DEMO_BOOKING[key]||DEMO_BOOKING.default;
-      save(d.booking,d.reason);
+      save(d.booking,d.reason,d.platforms);
     },400);
     return;
   }
@@ -1064,7 +1554,8 @@ async function askBooking(tripId,planId,legId,kind,origin,dest,hint){
   if(!k){ out.innerHTML=`<div class="mini" style="color:var(--err);margin-top:8px">尚未設定 AI 金鑰</div>`; return; }
   const prompt=`旅遊交通問題：從「${origin||"市區"}」到「${dest||"目的地"}」（${hint}）。\n`+
     `這段最常見的交通方式，是「可以現場購票（walkup）」還是「建議提前預訂（need）」？\n`+
-    `只回傳 JSON：{"booking":"need 或 walkup","reason":"一句話原因"}。繁體中文。`;
+    `若需預訂，列出 2-4 個這條路線常用的訂票平台「名稱」（不要網址，只要名稱）。\n`+
+    `只回傳 JSON：{"booking":"need 或 walkup","reason":"一句話原因","platforms":["平台名稱"]}。繁體中文。`;
   try{
     const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent`;
     const res=await fetch(url,{method:"POST",
@@ -1074,7 +1565,7 @@ async function askBooking(tripId,planId,legId,kind,origin,dest,hint){
     const data=await res.json();
     let text=data?.candidates?.[0]?.content?.parts?.map(p=>p.text).join("")||"";
     const parsed=JSON.parse(text.replace(/```json|```/g,"").trim());
-    save(parsed.booking==="need"?"need":"walkup", parsed.reason||"");
+    save(parsed.booking==="need"?"need":"walkup", parsed.reason||"", parsed.platforms||[]);
   }catch(e){
     out.innerHTML=`<div class="mini" style="color:var(--err);margin-top:8px">AI 判斷失敗：${esc(String(e.message||e))}</div>`;
   }
@@ -1234,7 +1725,7 @@ function today(){ const d=new Date(),p=n=>String(n).padStart(2,"0");
 document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
   document.querySelectorAll(".tab").forEach(x=>x.classList.remove("on"));
   t.classList.add("on"); view=t.dataset.view;
-  tripNav="list"; openTripId=null;
+  tripNav="list"; tripPhase="plan"; openTripId=null;
   tripDayFilter="全部"; packCatFilter="全部"; render();
 });
 document.getElementById("fab").onclick=()=>{
