@@ -113,6 +113,7 @@
   input,select,textarea{width:100%;border:2px solid var(--line);border-radius:13px;padding:11px;font-size:15px;
     background:var(--card);color:var(--ink);font-family:inherit;}
   textarea{resize:vertical;min-height:64px;}
+  textarea.big{min-height:140px;overflow:hidden;}
   .seg{display:flex;gap:6px;flex-wrap:wrap;}
   .seg button{flex:1;min-width:64px;padding:10px;border:2px solid var(--line);border-radius:13px;background:var(--card);
     color:var(--soft);font-weight:700;cursor:pointer;font-size:13px;}
@@ -190,6 +191,14 @@
   .soapedit{border:2px dashed var(--line);border-radius:14px;padding:12px;margin-bottom:12px;}
   .soapedit-h{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;}
   .soapedit-h input{font-weight:700;}
+  .numbadge{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;
+    background:var(--teal);color:#fff;font-size:12px;font-weight:800;flex-shrink:0;margin-right:5px;}
+  .complaint-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+  .complaint-row input{flex:1;}
+  .badgebar{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0;}
+  .badgebtn{border:2px solid var(--teal);background:var(--teal-soft);color:var(--teal-deep);border-radius:8px;
+    width:28px;height:28px;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0;}
+  .badgehint{font-size:11px;color:var(--soft);margin:2px 0 4px;}
   .qedit{border:2px dashed var(--line);border-radius:14px;padding:12px;margin-bottom:12px;}
   .qedit-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
   .qedit-h .lbl{font-weight:800;font-size:13px;color:var(--teal-deep);}
@@ -247,7 +256,22 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
 function esc(s){return String(s??"").replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));}
 function clone(o){ return JSON.parse(JSON.stringify(o)); }
 function fmtDate(ts){ if(!ts) return ""; const d=new Date(ts); return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; }
-function blankRound(label){ return {id:uid(), label:label||"", s:"", o:"", a:"", p:""}; }
+function blankRound(label){ return {id:uid(), label:label||"", s:[], o:"", a:"", p:""}; }
+const CIRCLE_NUMS=["","①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩","⑪","⑫","⑬","⑭","⑮","⑯","⑰","⑱","⑲","⑳"];
+function circleNum(n){ return CIRCLE_NUMS[n] || `(${n})`; }
+/* 把 O/A/P 內文裡的圈數字（①②…）轉成彩色小徽章，其餘照常跳脫顯示 */
+function renderSoapText(str){
+  return esc(str).replace(/[①-⑳]/g, m=>`<span class="numbadge">${m}</span>`);
+}
+/* 舊資料相容：S 欄位曾經是單一字串，統一轉成主訴項目陣列 */
+function normalizeCase(c){
+  (c.soapRounds||[]).forEach(r=>{
+    if(typeof r.s==="string"){ r.s = r.s.trim() ? [r.s.trim()] : []; }
+    if(!Array.isArray(r.s)) r.s=[];
+  });
+  if(typeof c.discussion!=="string") c.discussion="";
+  return c;
+}
 
 /* ===== 種子病例（第一次使用時的範例，示範「一個大 SOAP 由數個小 SOAP 組成」） ===== */
 function seedCases(){
@@ -258,22 +282,22 @@ function seedCases(){
       soapRounds:[
         {
           id:uid(), label:"初次評估與快速治療測試",
-          s:"主述：\n1. 身體側彎向左時，右腰會很緊，接近肋骨下緣、靠近胸腰關節（TL junction）附近。\n2. 右手舉手時角度受限，會有卡卡的感覺。",
-          o:"站姿：軀幹向右旋轉、右側骨盆前傾、右側肩胛骨下轉。\n坐姿：右側骨盆上提合併前傾、右側肩胛骨下轉。\n動作測試：軀幹總屈曲時腰椎屈曲不足；總伸直時ASIS可碰到腳趾但頭無法超過腳跟；總旋轉雙側皆受限；向右側屈時右下背有夾擠感；向左側屈時右下背緊繃痠痛（VAS 2/10）。\n觸診：右側第12肋下緣、近L1橫突處有壓痛點；右側豎脊肌緊繃；胸腰筋膜張力偏高。",
-          a:"懷疑右側方形肌（QL）、右側胸大肌（Pectoralis Major）、右側闊背肌（Latissimus Dorsi）緊繃導致上述症狀。",
-          p:"以快速治療測試逐一驗證假設：\n・放鬆QL → 無明顯進步\n・放鬆胸大肌 → 約10%進步\n・放鬆闊背肌 → 明顯進步 👍\n補充問診：個案最近背部訓練較多（每週2-3次），近期教練沒有安排胸部訓練。"
+          s:["身體側彎向左時，右腰會很緊，接近肋骨下緣、靠近胸腰關節（TL junction）附近。","右手舉手時角度受限，會有卡卡的感覺。"],
+          o:"① 站姿：軀幹向右旋轉、右側骨盆前傾。\n① ② 站姿：右側肩胛骨下轉。\n① 坐姿：右側骨盆上提合併前傾、右側肩胛骨下轉。\n① 動作測試：軀幹總屈曲時腰椎屈曲不足；總伸直時ASIS可碰到腳趾但頭無法超過腳跟；總旋轉雙側皆受限；向右側屈時右下背有夾擠感；向左側屈時右下背緊繃痠痛（VAS 2/10）。\n① 觸診：右側第12肋下緣、近L1橫突處有壓痛點；右側豎脊肌緊繃；胸腰筋膜張力偏高。",
+          a:"① 懷疑右側方形肌（QL）、右側胸大肌（Pectoralis Major）、右側闊背肌（Latissimus Dorsi）緊繃導致下背症狀。\n② 闊背肌與肩胛骨下轉型態也可能同時限制舉手角度，先於本輪一併觀察。",
+          p:"以快速治療測試逐一驗證假設：\n・放鬆QL → 無明顯進步\n・放鬆胸大肌 → 約10%進步\n・放鬆闊背肌 → ① ② 明顯進步 👍（下背與舉手卡卡感都改善）\n補充問診：個案最近背部訓練較多（每週2-3次），近期教練沒有安排胸部訓練。"
         },
         {
           id:uid(), label:"運動評估與介入",
-          s:"（承上一輪問診：訓練習慣背多於胸，可能與代償型態有關）",
+          s:["（承上一輪問診：訓練習慣背多於胸，可能與代償型態有關）"],
           o:"皮拉提斯動作評估：\n・伏地挺身：出現肩胛骨翼狀突出（scapula winging）\n・仰臥側滾至左側：動作品質差（抬腳跟時無法控制速度）",
           a:"懷疑前鋸肌（SA）無法與闊背肌產生交互抑制（reciprocal inhibition）；前側斜線筋膜張力過高，導致軀幹旋轉主動關節活動度不足。",
           p:"平衡肌群訓練：四足跪姿伏地挺身變化式（all-four push up plus）、槓鈴臥推 plus；側滾至左側動作訓練。\n柔軟度訓練：屈肘開書式（open book）訓練腹肌；風車式（pinwheel）訓練前側斜線筋膜與闊背肌。"
         },
         {
           id:uid(), label:"介入後複測",
-          s:"",
-          o:"雙側軀幹側屈時，右下背已無夾擠/怪異感；軀幹旋轉AROM進步；右手舉手時已無緊繃感。",
+          s:[],
+          o:"① 雙側軀幹側屈時，右下背已無夾擠/怪異感；軀幹旋轉AROM進步。\n② 右手舉手時已無緊繃感。",
           a:"",
           p:""
         }
@@ -287,7 +311,7 @@ function seedCases(){
       soapRounds:[
         {
           id:uid(), label:"初次評估",
-          s:"45歲女性，肩關節鏡下夾擠症清創術後第4週，主訴上舉過頭時前側肩膀疼痛（VAS 4/10）。",
+          s:["45歲女性，肩關節鏡下夾擠症清創術後第4週，主訴上舉過頭時前側肩膀疼痛（VAS 4/10）。"],
           o:"肩關節AROM前屈120°（健側170°），疼痛弧約在80-120°之間；MMT棘上肌4-/5、三角肌4/5；肩胛骨動作型態呈現上斜方肌代償上提。",
           a:"懷疑術後仍有肩峰下發炎反應，合併肩胛骨動作控制不良（scapular dyskinesis）代償。",
           p:"疼痛範圍內漸進式關節活動度訓練、肩胛骨穩定訓練（下斜方肌／前鋸肌啟動），暫緩過頭負重動作。"
@@ -305,7 +329,7 @@ function seedCases(){
 }
 
 /* ===== 全域狀態 ===== */
-let cases    = load(CASE_KEY, null) || seedCases();
+let cases    = (load(CASE_KEY, null) || seedCases()).map(normalizeCase);
 let trainees = load(TRAINEE_KEY, []);
 let attempts = load(ATTEMPT_KEY, []);
 
@@ -350,7 +374,7 @@ function cloudInit(){
     if(snap.exists){
       const d=snap.data();
       cloudSkipPush=true;
-      if(Array.isArray(d.cases))    cases=d.cases;
+      if(Array.isArray(d.cases))    cases=d.cases.map(normalizeCase);
       if(Array.isArray(d.trainees)) trainees=d.trainees;
       if(Array.isArray(d.attempts)) attempts=d.attempts;
       localStorage.setItem(CASE_KEY,JSON.stringify(cases));
@@ -506,9 +530,14 @@ function renderQuiz(){
   (c.soapRounds||[]).forEach((r,ri)=>{
     html+=`<div class="soapview">
         <div class="soapview-h">🔁 第 ${ri+1} 輪${r.label?`：${esc(r.label)}`:""}</div>`;
-    [["S",r.s],["O",r.o],["A",r.a],["P",r.p]].forEach(([lbl,val])=>{
+    (r.s||[]).forEach((item,si)=>{
+      if(item && item.trim()){
+        html+=`<div class="soapline"><span class="soaplbl">S</span><span class="numbadge">${circleNum(si+1)}</span><span class="soapb">${esc(item)}</span></div>`;
+      }
+    });
+    [["O",r.o],["A",r.a],["P",r.p]].forEach(([lbl,val])=>{
       if(val && val.trim()){
-        html+=`<div class="soapline"><span class="soaplbl">${lbl}</span><span class="soapb">${esc(val)}</span></div>`;
+        html+=`<div class="soapline"><span class="soaplbl">${lbl}</span><span class="soapb">${renderSoapText(val)}</span></div>`;
       }
     });
     html+=`</div>`;
@@ -755,20 +784,34 @@ function caseEditorHTML(isEdit){
     <label>病例標題</label>
     <input id="ceTitle" value="${esc(editCase.title)}" placeholder="例如：右側腰背緊繃合併肩舉受限">
     <label>SOAP 輪次</label>`;
+  const badgebarHTML=(ri,sCount,field)=> sCount
+    ? `<div class="badgebar">${Array.from({length:sCount},(_,i)=>i+1).map(n=>`<button type="button" class="badgebtn" data-badge="${ri}|${field}|${n}">${circleNum(n)}</button>`).join("")}</div>
+       <div class="badgehint">點數字可插入游標處，標記這段內容跟哪個主訴項目有關</div>`
+    : "";
   (editCase.soapRounds||[]).forEach((r,ri)=>{
+    const sCount=(r.s||[]).length;
     h+=`<div class="soapedit">
         <div class="soapedit-h">
           <input data-rlabel="${ri}" value="${esc(r.label)}" placeholder="第${ri+1}輪標題（選填，例如：初次評估／介入後複測）">
           <button class="iconbtn del" data-rdel="${ri}">🗑</button>
         </div>
-        <label style="margin:8px 0 3px">S 主觀資料</label>
-        <textarea data-rs="${ri}" placeholder="病人主訴、症狀描述…">${esc(r.s)}</textarea>
+        <label style="margin:8px 0 3px">S 主觀資料（可列出多個主訴項目）</label>`;
+    (r.s||[]).forEach((item,si)=>{
+      h+=`<div class="complaint-row"><span class="numbadge">${circleNum(si+1)}</span>
+          <input data-sitem="${ri}|${si}" value="${esc(item)}" placeholder="例如：舉手前側肩膀痛">
+          <button class="iconbtn del" data-sdel="${ri}|${si}">✕</button>
+        </div>`;
+    });
+    h+=`<button class="chip" data-sadd="${ri}" style="margin-bottom:8px">＋ 新增主訴項目</button>
         <label style="margin:8px 0 3px">O 客觀檢查</label>
-        <textarea data-ro="${ri}" placeholder="可自由書寫，例如：站姿觀察…&#10;動作測試…&#10;觸診…">${esc(r.o)}</textarea>
+        ${badgebarHTML(ri,sCount,"o")}
+        <textarea class="big" data-ro="${ri}" placeholder="可自由書寫，例如：站姿觀察…&#10;動作測試…&#10;觸診…">${esc(r.o)}</textarea>
         <label style="margin:8px 0 3px">A 評估／假設</label>
-        <textarea data-ra="${ri}" placeholder="臨床推理、懷疑的問題點…">${esc(r.a)}</textarea>
+        ${badgebarHTML(ri,sCount,"a")}
+        <textarea class="big" data-ra="${ri}" placeholder="臨床推理、懷疑的問題點…">${esc(r.a)}</textarea>
         <label style="margin:8px 0 3px">P 處置／計畫</label>
-        <textarea data-rp="${ri}" placeholder="治療手法、運動處方、結果…">${esc(r.p)}</textarea>
+        ${badgebarHTML(ri,sCount,"p")}
+        <textarea class="big" data-rp="${ri}" placeholder="治療手法、運動處方、結果…">${esc(r.p)}</textarea>
       </div>`;
   });
   h+=`<button class="chip wide" id="addRound" style="margin-bottom:14px">＋ 新增下一輪 SOAP</button>`;
@@ -812,11 +855,11 @@ function bindCaseEditor(isEdit){
   document.getElementById("ceTitle").oninput=e=>editCase.title=e.target.value;
   document.getElementById("ceDiscuss").oninput=e=>editCase.discussion=e.target.value;
 
+  function autoGrow(el){ el.style.height="auto"; el.style.height=(el.scrollHeight+2)+"px"; }
   document.querySelectorAll("[data-rlabel]").forEach(inp=>inp.oninput=e=>{ editCase.soapRounds[+inp.dataset.rlabel].label=e.target.value; });
-  document.querySelectorAll("[data-rs]").forEach(t=>t.oninput=e=>{ editCase.soapRounds[+t.dataset.rs].s=e.target.value; });
-  document.querySelectorAll("[data-ro]").forEach(t=>t.oninput=e=>{ editCase.soapRounds[+t.dataset.ro].o=e.target.value; });
-  document.querySelectorAll("[data-ra]").forEach(t=>t.oninput=e=>{ editCase.soapRounds[+t.dataset.ra].a=e.target.value; });
-  document.querySelectorAll("[data-rp]").forEach(t=>t.oninput=e=>{ editCase.soapRounds[+t.dataset.rp].p=e.target.value; });
+  document.querySelectorAll("[data-ro]").forEach(t=>{ autoGrow(t); t.oninput=e=>{ editCase.soapRounds[+t.dataset.ro].o=e.target.value; autoGrow(t); }; });
+  document.querySelectorAll("[data-ra]").forEach(t=>{ autoGrow(t); t.oninput=e=>{ editCase.soapRounds[+t.dataset.ra].a=e.target.value; autoGrow(t); }; });
+  document.querySelectorAll("[data-rp]").forEach(t=>{ autoGrow(t); t.oninput=e=>{ editCase.soapRounds[+t.dataset.rp].p=e.target.value; autoGrow(t); }; });
   document.querySelectorAll("[data-rdel]").forEach(b=>b.onclick=()=>{
     if(editCase.soapRounds.length<=1){ alert("至少要保留一輪 SOAP"); return; }
     editCase.soapRounds.splice(+b.dataset.rdel,1); refreshEditorSheet(isEdit);
@@ -824,6 +867,27 @@ function bindCaseEditor(isEdit){
   document.getElementById("addRound").onclick=()=>{
     editCase.soapRounds.push(blankRound("")); refreshEditorSheet(isEdit);
   };
+
+  document.querySelectorAll("[data-sitem]").forEach(inp=>inp.oninput=e=>{
+    const [ri,si]=inp.dataset.sitem.split("|"); editCase.soapRounds[+ri].s[+si]=e.target.value;
+  });
+  document.querySelectorAll("[data-sdel]").forEach(b=>b.onclick=()=>{
+    const [ri,si]=b.dataset.sdel.split("|"); editCase.soapRounds[+ri].s.splice(+si,1); refreshEditorSheet(isEdit);
+  });
+  document.querySelectorAll("[data-sadd]").forEach(b=>b.onclick=()=>{
+    editCase.soapRounds[+b.dataset.sadd].s.push(""); refreshEditorSheet(isEdit);
+  });
+  document.querySelectorAll("[data-badge]").forEach(b=>b.onclick=()=>{
+    const [ri,field,num]=b.dataset.badge.split("|");
+    const sel = field==="o" ? `[data-ro="${ri}"]` : field==="a" ? `[data-ra="${ri}"]` : `[data-rp="${ri}"]`;
+    const ta=document.querySelector(sel); if(!ta) return;
+    const start=ta.selectionStart??ta.value.length, end=ta.selectionEnd??ta.value.length;
+    const mark=circleNum(+num)+" ";
+    ta.value=ta.value.slice(0,start)+mark+ta.value.slice(end);
+    ta.selectionStart=ta.selectionEnd=start+mark.length;
+    ta.focus();
+    ta.dispatchEvent(new Event("input",{bubbles:true}));
+  });
 
   document.querySelectorAll("[data-qprompt]").forEach(t=>t.oninput=e=>{ editCase.questions[+t.dataset.qprompt].prompt=e.target.value; });
   document.querySelectorAll("[data-qexplain]").forEach(t=>t.oninput=e=>{ editCase.questions[+t.dataset.qexplain].explanation=e.target.value; });
