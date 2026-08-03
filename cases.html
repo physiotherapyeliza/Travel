@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>病例訓練系統</title>
+<!--
+  使用說明
+  1. 這個頁面與 index.html（旅遊手帳）是同一個 repo 裡的獨立頁面，功能互不干擾。
+  2. 沿用同一個 Firebase 專案（方便設定），但存在不同的 collection，不會跟旅遊/居家資料混在一起。
+  3. 沒網路時自動只用本機儲存，照常可用；有網路時會自動同步，讓不同新進治療師的作答紀錄互通。
+  4. 「管理後台」用一組簡單的 PIN 碼把關（不是正式帳密系統），PIN 碼可在下面 ADMIN_PIN 直接修改。
+-->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+  // ▼▼▼ 與 index.html 相同的 Firebase 專案設定 ▼▼▼
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyDu8fQdFy2nu31VHYhhrj-q93V-U69nlVE",
+    authDomain: "my-life-eba23.firebaseapp.com",
+    projectId: "my-life-eba23",
+    storageBucket: "my-life-eba23.firebasestorage.app",
+    messagingSenderId: "564889264526",
+    appId: "1:564889264526:web:ccb6ab2c3794b18a3484df"
+  };
+  // ▲▲▲▲▲
+
+  // ▼▼▼ 管理後台 PIN 碼（自行修改成你要的密碼）▼▼▼
+  const ADMIN_PIN = "physio2026";
+  // ▲▲▲▲▲
+
+  window.__db = null;
+  window.__hasFB = false;
+  try {
+    if (FIREBASE_CONFIG && FIREBASE_CONFIG.projectId) {
+      firebase.initializeApp(FIREBASE_CONFIG);
+      window.__db = firebase.firestore();
+      window.__hasFB = true;
+    }
+  } catch (e) {
+    console.warn("Firebase 初始化失敗，改用本機儲存", e);
+    window.__db = null; window.__hasFB = false;
+  }
+</script>
+
+<style>
+  :root{
+    /* 臨床藍綠色系 — 與旅遊(天藍)/居家(綠植)區隔 */
+    --paper:#f2f7f6;
+    --ink:#2b3a3a;
+    --soft:#7c8f8e;
+    --line:#dbe8e6;
+    --card:#ffffff;
+    --card2:#e7f3f1;
+    --teal:#2f8f8a;
+    --teal-deep:#226b67;
+    --teal-soft:#d7ece9;
+    --amber:#c98a3a;
+    --amber-soft:#f5e6d0;
+    --ok:#4f9e6f; --err:#cf6b5b;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Microsoft JhengHei",sans-serif;
+    font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:600px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;}
+
+  header{padding:18px 16px 8px;}
+  .htop{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  h1{font-size:20px;margin:0;font-weight:800;letter-spacing:.5px;flex:1;}
+  .sync-badge{font-size:12px;padding:4px 10px;border-radius:12px;background:var(--card2);color:var(--soft);white-space:nowrap;}
+  .sync-badge.ok{color:var(--ok);} .sync-badge.err{color:var(--err);}
+  .sync-badge.loading{color:var(--teal);}
+  .whoami{display:flex;align-items:center;justify-content:space-between;margin-top:8px;font-size:13px;color:var(--soft);}
+  .whoami b{color:var(--teal-deep);}
+  .switchbtn{border:none;background:none;color:var(--teal);font-size:12px;font-weight:700;cursor:pointer;padding:2px 4px;}
+
+  .tabs{display:flex;gap:6px;padding:10px 16px 4px;flex-wrap:wrap;}
+  .tab{flex:1;min-width:72px;text-align:center;padding:9px 0;border:2px solid var(--line);border-radius:16px;
+    background:var(--card);color:var(--soft);font-size:13px;font-weight:700;cursor:pointer;transition:.15s;}
+  .tab.on{background:var(--teal);color:#fff;border-color:var(--teal);}
+
+  main{flex:1;padding:8px 16px 40px;overflow-y:auto;}
+  .countLine{font-size:13px;color:var(--soft);margin:6px 2px 12px;}
+
+  .card{background:var(--card);border:2px solid var(--line);border-radius:18px;padding:14px;margin-bottom:12px;}
+  .card .row{display:flex;align-items:flex-start;gap:10px;}
+  .card .title{font-weight:700;font-size:16px;flex:1;}
+  .card .meta{font-size:13px;color:var(--soft);margin-top:3px;}
+  .tag{display:inline-block;background:var(--teal-soft);color:var(--teal-deep);font-size:12px;
+    padding:2px 9px;border-radius:10px;margin:4px 4px 0 0;font-weight:700;}
+  .tag.amber{background:var(--amber-soft);color:#8a5c1e;}
+  .mini{font-size:12px;color:var(--soft);}
+
+  .empty{text-align:center;color:var(--soft);padding:48px 16px;}
+  .empty .big{font-size:17px;font-weight:700;color:var(--ink);margin-bottom:6px;}
+
+  .chip-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
+  .chip{padding:6px 12px;border:2px solid var(--line);border-radius:14px;background:var(--card);
+    color:var(--soft);font-size:13px;font-weight:700;cursor:pointer;}
+  .chip.on{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-deep);}
+  .chip.wide{width:100%;text-align:center;}
+  .chip.primary{background:var(--teal);color:#fff;border-color:var(--teal);}
+  .chip.danger{background:var(--card);color:var(--err);border-color:var(--err);}
+
+  label{display:block;font-size:13px;color:var(--soft);font-weight:700;margin:12px 0 5px;}
+  input,select,textarea{width:100%;border:2px solid var(--line);border-radius:13px;padding:11px;font-size:15px;
+    background:var(--card);color:var(--ink);font-family:inherit;}
+  textarea{resize:vertical;min-height:64px;}
+  .seg{display:flex;gap:6px;flex-wrap:wrap;}
+  .seg button{flex:1;min-width:64px;padding:10px;border:2px solid var(--line);border-radius:13px;background:var(--card);
+    color:var(--soft);font-weight:700;cursor:pointer;font-size:13px;}
+  .seg button.on{background:var(--teal);color:#fff;border-color:var(--teal);}
+  .btns{display:flex;gap:10px;margin-top:18px;}
+  .btns button{flex:1;padding:13px;border-radius:14px;font-size:16px;font-weight:800;cursor:pointer;border:2px solid var(--line);}
+  .btns .save{background:var(--teal);color:#fff;border-color:var(--teal);}
+  .btns .cancel{background:var(--card);color:var(--soft);}
+  .del{width:100%;margin-top:10px;padding:12px;border-radius:14px;border:2px solid var(--err);
+    background:var(--card);color:var(--err);font-weight:800;font-size:15px;cursor:pointer;}
+
+  .mask{position:fixed;inset:0;background:rgba(30,45,45,.45);z-index:40;display:none;}
+  .mask.on{display:block;}
+  .sheet{position:fixed;left:0;right:0;bottom:0;background:var(--paper);z-index:50;border-radius:22px 22px 0 0;
+    padding:20px 18px calc(20px + env(safe-area-inset-bottom));max-width:600px;margin:0 auto;
+    transform:translateY(100%);transition:.25s;max-height:90vh;overflow-y:auto;}
+  .sheet.on{transform:translateY(0);}
+  .sheet h3{margin:0 0 14px;font-size:18px;}
+
+  /* 身份門檻（全螢幕遮罩） */
+  .idgate{position:fixed;inset:0;background:var(--paper);z-index:100;display:none;align-items:center;justify-content:center;padding:20px;}
+  .idgate.on{display:flex;}
+  .idcard{background:var(--card);border:2px solid var(--line);border-radius:20px;padding:24px;max-width:380px;width:100%;text-align:center;}
+  .idcard .ico{font-size:38px;margin-bottom:8px;}
+  .idcard h2{font-size:19px;margin:0 0 6px;}
+  .idcard p{font-size:13px;color:var(--soft);margin:0 0 16px;}
+
+  /* 病例詳情 */
+  .vign{background:var(--card2);border-radius:16px;padding:14px;margin-bottom:14px;}
+  .vign-h{font-weight:800;color:var(--teal-deep);font-size:13px;margin:10px 0 4px;}
+  .vign-h:first-child{margin-top:0;}
+  .vign-b{font-size:14px;line-height:1.7;white-space:pre-wrap;}
+
+  .qcard{background:var(--card);border:2px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px;}
+  .qcard .qn{font-weight:800;font-size:15px;margin-bottom:10px;}
+  .optbtn{display:block;width:100%;text-align:left;padding:11px 13px;border:2px solid var(--line);border-radius:13px;
+    background:var(--card);color:var(--ink);font-size:14px;margin-bottom:8px;cursor:pointer;}
+  .optbtn.on{border-color:var(--teal);background:var(--teal-soft);font-weight:700;}
+  .optbtn.correct{border-color:var(--ok);background:#e7f3ec;color:var(--ok);font-weight:700;}
+  .optbtn.wrong{border-color:var(--err);background:#fbeae7;color:var(--err);font-weight:700;}
+  .optbtn:disabled{cursor:default;}
+  .explain{margin-top:8px;background:var(--card2);border-radius:12px;padding:10px 12px;font-size:13px;color:var(--ink);line-height:1.6;}
+  .explain b{color:var(--teal-deep);}
+  .selfrate{display:flex;gap:8px;margin-top:10px;}
+  .selfrate button{flex:1;padding:9px 4px;border:2px solid var(--line);border-radius:12px;background:var(--card);
+    color:var(--soft);font-size:12px;font-weight:700;cursor:pointer;}
+  .selfrate button.on{background:var(--teal);color:#fff;border-color:var(--teal);}
+  .myresp{background:var(--card2);border-radius:12px;padding:10px 12px;font-size:14px;white-space:pre-wrap;margin-bottom:6px;}
+
+  .scorebox{background:linear-gradient(135deg,var(--amber-soft),var(--card2));border:2px solid var(--amber);
+    border-radius:18px;padding:16px;margin-bottom:14px;text-align:center;}
+  .scorebox .big{font-size:30px;font-weight:800;color:#8a5c1e;}
+  .scorebox .sub{font-size:13px;color:var(--soft);margin-top:2px;}
+
+  .statrow{display:flex;justify-content:space-between;padding:6px 0;font-size:14px;border-bottom:1px solid var(--card2);}
+  .statrow:last-child{border-bottom:none;}
+  .statrow b{color:var(--teal-deep);}
+
+  .pinwrap{max-width:320px;margin:40px auto;text-align:center;}
+  .pinwrap .ico{font-size:36px;margin-bottom:8px;}
+
+  .adminrow{display:flex;align-items:center;gap:10px;}
+  .adminrow .info{flex:1;}
+  .iconbtn{border:none;background:var(--card2);color:var(--teal-deep);border-radius:10px;width:34px;height:34px;font-size:15px;cursor:pointer;}
+  .iconbtn.del{color:var(--err);}
+
+  .qedit{border:2px dashed var(--line);border-radius:14px;padding:12px;margin-bottom:12px;}
+  .qedit-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  .qedit-h .lbl{font-weight:800;font-size:13px;color:var(--teal-deep);}
+  .optrow{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+  .optrow input{flex:1;}
+  .optrow .radiomark{width:26px;height:26px;border:2px solid var(--line);border-radius:50%;flex-shrink:0;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;}
+  .optrow .radiomark.on{background:var(--ok);border-color:var(--ok);}
+  .attempt-item{border-top:1px solid var(--card2);padding-top:10px;margin-top:10px;}
+  .accordion{cursor:pointer;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="htop">
+      <h1>🩺 病例訓練系統</h1>
+      <span id="syncBadge" class="sync-badge"></span>
+    </div>
+    <div class="whoami">
+      <span>👤 <b id="whoName"></b></span>
+      <button class="switchbtn" id="switchUser">切換使用者</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab on" data-view="library">病例庫</button>
+    <button class="tab" data-view="mine">我的紀錄</button>
+    <button class="tab" data-view="admin">管理後台</button>
+  </div>
+
+  <main id="main"></main>
+</div>
+
+<div class="mask" id="mask"></div>
+<div class="sheet" id="sheet"></div>
+
+<div class="idgate" id="idgate">
+  <div class="idcard">
+    <div class="ico">🩺</div>
+    <h2>歡迎使用病例訓練系統</h2>
+    <p>請輸入你的姓名或代號，方便記錄你的作答與進度（不需要密碼）。</p>
+    <input id="idNameInput" placeholder="例如：王小明" maxlength="20">
+    <button class="chip primary wide" id="idNameSave" style="margin-top:14px;padding:12px">開始使用</button>
+  </div>
+</div>
+
+<script>
+/* ===== 本機儲存 key ===== */
+const CASE_KEY="ct_cases", TRAINEE_KEY="ct_trainees", ATTEMPT_KEY="ct_attempts";
+const MY_ID_KEY="ct_my_id", MY_NAME_KEY="ct_my_name", ADMIN_OK_KEY="ct_admin_ok";
+
+const CATS = ["骨科","神經","運動傷害","心肺","兒科","其他"];
+const DIFFS = ["入門","中階","進階"];
+
+function load(k,d){ try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d} }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function esc(s){return String(s??"").replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));}
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+function fmtDate(ts){ if(!ts) return ""; const d=new Date(ts); return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; }
+
+/* ===== 種子病例（第一次使用時的範例資料） ===== */
+function seedCases(){
+  return [
+    {
+      id:uid(), title:"術後全膝關節置換（TKA）第2週", category:"骨科", difficulty:"入門",
+      vignette:{
+        chief:"72歲女性，右膝關節置換術後第14天，主訴膝關節僵硬與行走時疼痛（VAS 5/10）。",
+        history:"術前診斷為退化性膝關節炎，病史包含高血壓、第二型糖尿病控制良好。術後恢復順利，傷口無感染徵象。",
+        exam:"右膝主動關節活動度（AROM）：屈曲85°、伸直-5°（缺角）；股四頭肌MMT 3/5；步態呈現右膝屈曲攣縮代償步態，需單拐輔助。",
+        imaging:"X光顯示人工關節位置良好，無鬆脫或感染徵象。"
+      },
+      questions:[
+        {id:uid(),type:"mcq",prompt:"此階段最優先的物理治療目標為何？",
+          options:["增加膝關節活動度並改善伸直角度","立即進行重量訓練增加肌力","轉介進行核磁共振檢查","限制活動促進傷口癒合"],
+          answerIdx:0,
+          explanation:"術後2週的首要目標是恢復關節活動度（尤其是伸直角度），避免屈曲攣縮影響日後步態與功能。"},
+        {id:uid(),type:"mcq",prompt:"病人主訴髕骨周圍緊繃疼痛，觸診髕骨活動度受限，這對膝關節屈曲角度恢復的影響為？",
+          options:["無影響，可忽略","可能限制關節活動度，應加入髕骨鬆動術","應立即轉診開刀","應完全停止復健"],
+          answerIdx:1,
+          explanation:"髕骨活動度受限（如髕骨上下滑動不足）常會限制屈曲角度恢復，可透過髕骨鬆動術（patellar mobilization）改善。"},
+        {id:uid(),type:"open",prompt:"請列出你會為這位病人設計的治療計畫重點（至少3項）",
+          modelAnswer:"1. 被動/主動輔助關節活動度訓練，特別加強伸直角度；2. 股四頭肌等長收縮及直膝抬腿訓練；3. 漸進式負重與步態訓練，必要時使用輔具；4. 冰敷/消腫處理及疼痛管理；5. 衛教居家運動與注意事項（如避免久坐、監測傷口感染徵象）。"}
+      ]
+    },
+    {
+      id:uid(), title:"急性腦中風後左側偏癱", category:"神經", difficulty:"中階",
+      vignette:{
+        chief:"65歲男性，缺血性腦中風後第5天，左側肢體無力。",
+        history:"有高血壓病史，中風後意識清楚，語言功能正常（右側大腦病灶）。",
+        exam:"左上肢MMT 2/5，左下肢MMT 3/5，左側輕度感覺異常，坐姿平衡尚可，站立需中度協助，Brunnstrom恢復分期約第3期。",
+        imaging:"腦部電腦斷層顯示右側大腦中動脈區域梗塞。"
+      },
+      questions:[
+        {id:uid(),type:"mcq",prompt:"此病人目前的Brunnstrom恢復分期第3期，代表的臨床表現為？",
+          options:["肢體完全癱瘓無法產生動作","開始出現共同動作模式（synergy）","可脫離共同動作做出部分分離動作","動作幾近恢復正常"],
+          answerIdx:1,
+          explanation:"第3期特徵為痙攣達到高峰，可產生共同動作模式，但尚無法做出分離動作。"},
+        {id:uid(),type:"open",prompt:"請說明你會如何介入以促進此病人動作恢復並預防合併症？",
+          modelAnswer:"早期介入重點包括：擺位與姿勢控制預防攣縮及壓瘡；促進患側肢體感覺輸入與主動動作誘發（如工作導向訓練）；坐站平衡與轉位訓練；預防肩關節半脫位（適當支托）；漸進式步態訓練與肌力訓練；家屬衛教與跌倒預防。"}
+      ]
+    },
+    {
+      id:uid(), title:"ACL重建術後6週足球選手", category:"運動傷害", difficulty:"中階",
+      vignette:{
+        chief:"22歲男性足球員，右膝前十字韌帶（ACL）重建術後6週，希望盡快恢復訓練。",
+        history:"受傷機轉為變向時膝關節扭傷，MRI證實ACL完全斷裂合併內側半月板部分損傷，已接受自體肌腱重建手術，同時處理半月板修補。",
+        exam:"AROM屈曲110°，伸直0°；股四頭肌肌力約健側70%；單腳站立平衡略差；尚未進行慢跑。",
+        imaging:"無特殊。"
+      },
+      questions:[
+        {id:uid(),type:"mcq",prompt:"術後6週的復健重點應優先著重於？",
+          options:["立即恢復切截/變向訓練","開放式與閉鎖式動力鏈運動並重建肌力與本體感覺","完全休息等待組織癒合","進行高強度增強式訓練"],
+          answerIdx:1,
+          explanation:"此階段重建組織尚未完全癒合，應著重漸進式肌力（尤其股四頭肌與大腿後肌）、本體感覺與神經肌肉控制訓練，變向與增強式訓練需待更晚期通過功能測試後才進行。"},
+        {id:uid(),type:"open",prompt:"此選手詢問何時可以恢復球場訓練，你會如何回答並說明評估標準？",
+          modelAnswer:"需待通過一系列功能性測試（如單腳跳躍測試對稱指數>90%、等速肌力測試、動作品質評估）並經過至少6-9個月的漸進式訓練，同時無腫脹疼痛，且醫師/治療團隊共同確認方可考慮重返運動，不能只以時間作為唯一標準。"}
+      ]
+    },
+    {
+      id:uid(), title:"COPD急性惡化後住院病人", category:"心肺", difficulty:"入門",
+      vignette:{
+        chief:"78歲男性，慢性阻塞性肺病(COPD)急性惡化住院第3天，主訴活動時喘。",
+        history:"COPD病史10年，長期使用吸入劑，此次因肺炎誘發急性惡化，已使用抗生素及支氣管擴張劑治療，目前生命徵象穩定。",
+        exam:"休息時血氧94%（room air），行走50公尺後降至88%並感覺呼吸困難（Borg scale 6/10），聽診雙側呼吸音減弱伴喘鳴音。",
+        imaging:"胸部X光顯示慢性肺氣腫變化，肺炎浸潤已改善中。"
+      },
+      questions:[
+        {id:uid(),type:"mcq",prompt:"為此病人執行活動時，下列何者是需要立即停止治療的警訊？",
+          options:["血氧下降至88%且病人主觀呼吸困難但可忍受","血氧降至85%以下或病人出現發紺、意識改變","病人心跳稍微上升","病人主訴輕微疲勞"],
+          answerIdx:1,
+          explanation:"一般臨床安全準則為血氧明顯過低（依院內規範，常見as低於85-88%）、出現發紺、意識改變或嚴重呼吸窘迫時應立即停止活動並評估，實際數值需搭配院內政策與醫囑執行。"},
+        {id:uid(),type:"open",prompt:"請描述你會如何為這位病人規劃漸進式活動訓練與衛教重點？",
+          modelAnswer:"包括：噘嘴式呼吸與橫膈呼吸訓練、能量保存技巧衛教、漸進式有氧耐力訓練（監控血氧與Borg scale調整強度）、上下肢肌力訓練預防去適應化、居家氧氣使用與呼吸急救衛教、疫苗接種與戒菸衛教（如適用）、活動中密切監測生命徵象。"}
+      ]
+    }
+  ];
+}
+
+/* ===== 全域狀態 ===== */
+let cases    = load(CASE_KEY, null) || seedCases();
+let trainees = load(TRAINEE_KEY, []);
+let attempts = load(ATTEMPT_KEY, []);
+
+let myId   = localStorage.getItem(MY_ID_KEY) || "";
+let myName = localStorage.getItem(MY_NAME_KEY) || "";
+let adminUnlocked = localStorage.getItem(ADMIN_OK_KEY) === "1";
+
+let view = "library";
+let libNav = "list";        // list | quiz
+let libCatFilter = "全部";
+let openCaseId = null;
+let curQuiz = null;          // {caseId, submitted, attemptId}
+
+let adminSub = "cases";      // cases | trainees
+let adminExpand = null;      // 展開中的學員 id
+
+/* ===== 儲存 ===== */
+function saveCases(){ localStorage.setItem(CASE_KEY,JSON.stringify(cases)); cloudPush(); }
+function saveTrainees(){ localStorage.setItem(TRAINEE_KEY,JSON.stringify(trainees)); cloudPush(); }
+function saveAttempts(){ localStorage.setItem(ATTEMPT_KEY,JSON.stringify(attempts)); cloudPush(); }
+
+/* ===== Firebase 雲端同步 ===== */
+const SHARE_DOC = "fae67c9acc9873b47976c33d2c862243";
+const cloudRef = window.__db ? window.__db.collection("therapist_cases").doc(SHARE_DOC) : null;
+
+let cloudReady=false, cloudSkipPush=false, cloudTimer=null;
+
+function cloudPush(){
+  if(!cloudRef) return;
+  if(cloudSkipPush){ cloudSkipPush=false; return; }
+  if(!cloudReady) return;
+  clearTimeout(cloudTimer);
+  cloudTimer=setTimeout(()=>{
+    cloudRef.set({ cases, trainees, attempts, updatedAt:Date.now() })
+      .then(()=>setSyncBadge("ok"))
+      .catch(e=>{ console.warn("雲端儲存失敗",e); setSyncBadge("err"); });
+  },800);
+}
+function cloudInit(){
+  if(!cloudRef){ setSyncBadge("local"); return; }
+  setSyncBadge("loading");
+  cloudRef.onSnapshot(snap=>{
+    if(snap.exists){
+      const d=snap.data();
+      cloudSkipPush=true;
+      if(Array.isArray(d.cases))    cases=d.cases;
+      if(Array.isArray(d.trainees)) trainees=d.trainees;
+      if(Array.isArray(d.attempts)) attempts=d.attempts;
+      localStorage.setItem(CASE_KEY,JSON.stringify(cases));
+      localStorage.setItem(TRAINEE_KEY,JSON.stringify(trainees));
+      localStorage.setItem(ATTEMPT_KEY,JSON.stringify(attempts));
+      cloudReady=true; setSyncBadge("ok"); render();
+    }else{
+      cloudReady=true;
+      cloudRef.set({ cases, trainees, attempts, updatedAt:Date.now() })
+        .then(()=>setSyncBadge("ok")).catch(()=>setSyncBadge("err"));
+    }
+  }, err=>{ console.warn("雲端讀取失敗",err); setSyncBadge("err"); cloudReady=false; });
+}
+function setSyncBadge(state){
+  const el=document.getElementById("syncBadge"); if(!el) return;
+  const map={loading:"☁️ 同步中…",ok:"☁️ 已同步",err:"⚠️ 同步異常",local:"📵 本機模式"};
+  el.textContent=map[state]||""; el.className="sync-badge "+state;
+}
+
+/* ===== 身份 ===== */
+function ensureIdentity(){
+  const gate=document.getElementById("idgate");
+  if(myId && myName){
+    gate.classList.remove("on");
+    document.getElementById("whoName").textContent=myName;
+    return true;
+  }
+  gate.classList.add("on");
+  document.getElementById("idNameInput").value="";
+  document.getElementById("idNameInput").focus();
+  return false;
+}
+function saveIdentity(name){
+  name=(name||"").trim();
+  if(!name){ alert("請輸入姓名或代號"); return; }
+  myId=uid(); myName=name;
+  localStorage.setItem(MY_ID_KEY,myId);
+  localStorage.setItem(MY_NAME_KEY,myName);
+  if(!trainees.some(t=>t.id===myId)){
+    trainees.push({id:myId,name:myName,createdAt:Date.now()});
+    saveTrainees();
+  }
+  ensureIdentity();
+  render();
+}
+document.getElementById("idNameSave").onclick=()=>saveIdentity(document.getElementById("idNameInput").value);
+document.getElementById("idNameInput").addEventListener("keydown",e=>{ if(e.key==="Enter") saveIdentity(e.target.value); });
+document.getElementById("switchUser").onclick=()=>{ myId=""; myName=""; ensureIdentity(); };
+
+/* ===== sheet / mask ===== */
+function openSheet(html){
+  document.getElementById("sheet").innerHTML=html;
+  document.getElementById("mask").classList.add("on");
+  document.getElementById("sheet").classList.add("on");
+}
+function closeSheet(){
+  document.getElementById("mask").classList.remove("on");
+  document.getElementById("sheet").classList.remove("on");
+}
+document.getElementById("mask").onclick=closeSheet;
+
+/* ===== tabs ===== */
+document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{
+  view=b.dataset.view;
+  document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===b));
+  if(view==="library"){ libNav="list"; openCaseId=null; curQuiz=null; }
+  render();
+});
+
+/* ===== render dispatcher ===== */
+function render(){
+  if(!ensureIdentity()) return;
+  const main=document.getElementById("main");
+  if(view==="library"){ libNav==="quiz" ? renderQuiz() : renderLibrary(); }
+  else if(view==="mine") renderMine();
+  else renderAdmin();
+}
+
+/* ----- 病例庫：列表 ----- */
+function renderLibrary(){
+  const main=document.getElementById("main");
+  const catsInUse = ["全部", ...CATS.filter(c=>cases.some(cs=>cs.category===c))];
+  let html=`<div class="chip-row">${catsInUse.map(c=>
+    `<button class="chip ${libCatFilter===c?'on':''}" data-catf="${esc(c)}">${esc(c)}</button>`
+  ).join("")}</div>`;
+
+  const list = cases.filter(c=>libCatFilter==="全部"||c.category===libCatFilter);
+  html+=`<div class="countLine">共 ${list.length} 個病例</div>`;
+  if(!list.length){
+    html+=`<div class="empty"><div class="big">還沒有病例</div>請請管理者到「管理後台」新增病例。</div>`;
+  }else{
+    html+=list.map(c=>{
+      const my=attempts.filter(a=>a.traineeId===myId && a.caseId===c.id);
+      const best = my.length ? Math.max(...my.map(a=>Math.round(100*a.score/Math.max(a.maxScore,1)))) : null;
+      return `<div class="card" data-open="${c.id}">
+        <div class="row">
+          <div style="flex:1">
+            <div class="title">📋 ${esc(c.title)}</div>
+            <div style="margin-top:6px">
+              <span class="tag">${esc(c.category)}</span>
+              <span class="tag amber">${esc(c.difficulty)}</span>
+            </div>
+            <div class="meta" style="margin-top:6px">${my.length?`已作答 ${my.length} 次・最佳 ${best}%`:"尚未作答"}</div>
+          </div>
+          <div class="mini" style="align-self:center">›</div>
+        </div>
+      </div>`;
+    }).join("");
+  }
+  main.innerHTML=html;
+  main.querySelectorAll("[data-catf]").forEach(b=>b.onclick=()=>{ libCatFilter=b.dataset.catf; renderLibrary(); });
+  main.querySelectorAll("[data-open]").forEach(c=>c.onclick=()=>{
+    openCaseId=c.dataset.open; libNav="quiz"; initQuiz(openCaseId); render();
+  });
+}
+
+/* ----- 病例庫：作答 ----- */
+function initQuiz(caseId){
+  curQuiz = { caseId, submitted:false, attemptId:null, selected:{}, responses:{} };
+}
+function scoreAttempt(a){
+  const max=a.answers.length;
+  const score=a.answers.reduce((s,x)=> s + (x.type==="mcq" ? (x.correct?1:0) : (x.selfRate??0)), 0);
+  a.maxScore=max; a.score=score;
+}
+function renderQuiz(){
+  const main=document.getElementById("main");
+  const c=cases.find(x=>x.id===openCaseId);
+  if(!c){ libNav="list"; render(); return; }
+  const v=c.vignette||{};
+
+  let html=`<div style="margin-bottom:10px"><button class="chip" id="backLib">‹ 返回病例庫</button></div>`;
+  html+=`<div class="card" style="margin-bottom:10px">
+      <div class="title">📋 ${esc(c.title)}</div>
+      <div style="margin-top:6px"><span class="tag">${esc(c.category)}</span><span class="tag amber">${esc(c.difficulty)}</span></div>
+    </div>`;
+
+  html+=`<div class="vign">`;
+  if(v.chief) html+=`<div class="vign-h">主訴</div><div class="vign-b">${esc(v.chief)}</div>`;
+  if(v.history) html+=`<div class="vign-h">病史</div><div class="vign-b">${esc(v.history)}</div>`;
+  if(v.exam) html+=`<div class="vign-h">理學檢查</div><div class="vign-b">${esc(v.exam)}</div>`;
+  if(v.imaging) html+=`<div class="vign-h">影像／其他檢查</div><div class="vign-b">${esc(v.imaging)}</div>`;
+  html+=`</div>`;
+
+  const attempt = curQuiz.submitted ? attempts.find(a=>a.id===curQuiz.attemptId) : null;
+
+  (c.questions||[]).forEach((q,qi)=>{
+    const ansEntry = attempt ? attempt.answers.find(a=>a.qid===q.id) : null;
+    html+=`<div class="qcard"><div class="qn">Q${qi+1}. ${esc(q.prompt)}</div>`;
+    if(q.type==="mcq"){
+      (q.options||[]).forEach((opt,oi)=>{
+        let cls="";
+        if(curQuiz.submitted){
+          if(oi===q.answerIdx) cls="correct";
+          else if(oi===(ansEntry?ansEntry.selectedIdx:-1)) cls="wrong";
+        }else if(curQuiz.selected[q.id]===oi){ cls="on"; }
+        html+=`<button class="optbtn ${cls}" data-mcq="${q.id}|${oi}" ${curQuiz.submitted?"disabled":""}>${esc(opt)}</button>`;
+      });
+      if(curQuiz.submitted && q.explanation){
+        html+=`<div class="explain"><b>說明：</b>${esc(q.explanation)}</div>`;
+      }
+    }else{
+      if(!curQuiz.submitted){
+        html+=`<textarea data-open="${q.id}" placeholder="輸入你的想法…">${esc(curQuiz.responses[q.id]||"")}</textarea>`;
+      }else{
+        html+=`<div class="myresp">${esc(ansEntry?ansEntry.response:"").replace(/\n/g,"<br>")||"（未作答）"}</div>
+          <div class="explain"><b>參考答案：</b>${esc(q.modelAnswer||"")}</div>
+          <div class="mini" style="margin-top:8px">請對照參考答案自評：</div>
+          <div class="selfrate">
+            <button class="${ansEntry.selfRate===0?'on':''}" data-rate="${q.id}|0">待加強</button>
+            <button class="${ansEntry.selfRate===0.5?'on':''}" data-rate="${q.id}|0.5">普通</button>
+            <button class="${ansEntry.selfRate===1?'on':''}" data-rate="${q.id}|1">答對</button>
+          </div>`;
+      }
+    }
+    html+=`</div>`;
+  });
+
+  if(!curQuiz.submitted){
+    html+=`<button class="chip primary wide" id="submitQuiz" style="padding:13px">提交作答</button>`;
+  }else if(attempt){
+    const pct=Math.round(100*attempt.score/Math.max(attempt.maxScore,1));
+    html+=`<div class="scorebox"><div class="big">${pct}%</div><div class="sub">本次得分 ${attempt.score} / ${attempt.maxScore}</div></div>`;
+    html+=`<button class="chip wide" id="doneQuiz" style="padding:13px">完成，返回病例庫</button>`;
+  }
+
+  main.innerHTML=html;
+  document.getElementById("backLib").onclick=()=>{ libNav="list"; curQuiz=null; render(); };
+  main.querySelectorAll("[data-mcq]").forEach(b=>b.onclick=()=>{
+    const [qid,oi]=b.dataset.mcq.split("|");
+    curQuiz.selected[qid]=Number(oi); renderQuiz();
+  });
+  main.querySelectorAll("[data-open]").forEach(ta=>ta.oninput=()=>{
+    curQuiz.responses[ta.dataset.open]=ta.value;
+  });
+  const submitBtn=document.getElementById("submitQuiz");
+  if(submitBtn) submitBtn.onclick=()=>submitQuiz(c);
+  main.querySelectorAll("[data-rate]").forEach(b=>b.onclick=()=>{
+    const [qid,val]=b.dataset.rate.split("|");
+    const a=attempts.find(x=>x.id===curQuiz.attemptId);
+    const entry=a.answers.find(x=>x.qid===qid);
+    entry.selfRate=Number(val);
+    scoreAttempt(a); saveAttempts(); renderQuiz();
+  });
+  const doneBtn=document.getElementById("doneQuiz");
+  if(doneBtn) doneBtn.onclick=()=>{ libNav="list"; curQuiz=null; render(); };
+}
+function submitQuiz(c){
+  const answers=(c.questions||[]).map(q=>{
+    if(q.type==="mcq"){
+      const selectedIdx = curQuiz.selected[q.id];
+      return {qid:q.id, type:"mcq", selectedIdx: selectedIdx===undefined?-1:selectedIdx, correct: selectedIdx===q.answerIdx};
+    }
+    return {qid:q.id, type:"open", response: curQuiz.responses[q.id]||"", selfRate:null};
+  });
+  const attempt={
+    id:uid(), traineeId:myId, traineeName:myName,
+    caseId:c.id, caseTitle:c.title, category:c.category,
+    answers, submittedAt:Date.now()
+  };
+  scoreAttempt(attempt);
+  attempts.push(attempt);
+  saveAttempts();
+  curQuiz.submitted=true; curQuiz.attemptId=attempt.id;
+  renderQuiz();
+}
+
+/* ----- 我的紀錄 ----- */
+function renderMine(){
+  const main=document.getElementById("main");
+  const mine=attempts.filter(a=>a.traineeId===myId).sort((a,b)=>b.submittedAt-a.submittedAt);
+
+  let html="";
+  if(mine.length){
+    const byCat={};
+    mine.forEach(a=>{
+      const k=a.category||"其他";
+      if(!byCat[k]) byCat[k]={sum:0,max:0,n:0};
+      byCat[k].sum+=a.score; byCat[k].max+=a.maxScore; byCat[k].n++;
+    });
+    html+=`<div class="card"><div class="title" style="margin-bottom:6px">📊 各類別平均表現</div>`;
+    Object.keys(byCat).forEach(k=>{
+      const b=byCat[k]; const pct=Math.round(100*b.sum/Math.max(b.max,1));
+      html+=`<div class="statrow"><span>${esc(k)}</span><b>${pct}%（${b.n}次）</b></div>`;
+    });
+    html+=`</div>`;
+  }
+
+  html+=`<div class="countLine">共作答 ${mine.length} 次</div>`;
+  if(!mine.length){
+    html+=`<div class="empty"><div class="big">還沒有作答紀錄</div>到「病例庫」選一個病例開始練習吧。</div>`;
+  }else{
+    html+=mine.map(a=>{
+      const pct=Math.round(100*a.score/Math.max(a.maxScore,1));
+      return `<div class="card">
+        <div class="row">
+          <div style="flex:1">
+            <div class="title">${esc(a.caseTitle)}</div>
+            <div class="meta">${esc(a.category)}　${fmtDate(a.submittedAt)}</div>
+          </div>
+          <div class="tag amber">${pct}%</div>
+        </div>
+      </div>`;
+    }).join("");
+  }
+  main.innerHTML=html;
+}
+
+/* ----- 管理後台 ----- */
+function renderAdmin(){
+  const main=document.getElementById("main");
+  if(!adminUnlocked){
+    main.innerHTML=`<div class="pinwrap">
+        <div class="ico">🔒</div>
+        <div style="font-weight:800;margin-bottom:10px">請輸入管理 PIN 碼</div>
+        <input id="pinInput" type="password" placeholder="PIN 碼">
+        <button class="chip primary wide" id="pinGo" style="margin-top:12px;padding:12px">解鎖</button>
+      </div>`;
+    document.getElementById("pinGo").onclick=()=>{
+      if(document.getElementById("pinInput").value===ADMIN_PIN){
+        adminUnlocked=true; localStorage.setItem(ADMIN_OK_KEY,"1"); render();
+      }else alert("PIN 碼錯誤");
+    };
+    document.getElementById("pinInput").addEventListener("keydown",e=>{ if(e.key==="Enter") document.getElementById("pinGo").click(); });
+    return;
+  }
+
+  let html=`<div class="chip-row">
+      <button class="chip ${adminSub==='cases'?'on':''}" data-asub="cases">病例管理</button>
+      <button class="chip ${adminSub==='trainees'?'on':''}" data-asub="trainees">學員紀錄</button>
+      <button class="chip" id="adminLock" style="margin-left:auto">🔒 鎖定</button>
+    </div>`;
+
+  if(adminSub==="cases"){
+    html+=`<button class="chip primary wide" id="addCase" style="margin-bottom:12px;padding:12px">＋ 新增病例</button>`;
+    if(!cases.length){
+      html+=`<div class="empty"><div class="big">還沒有病例</div>按上方按鈕新增第一個病例。</div>`;
+    }else{
+      html+=cases.map(c=>`<div class="card"><div class="adminrow">
+          <div class="info">
+            <div class="title">${esc(c.title)}</div>
+            <div class="meta">${esc(c.category)}・${esc(c.difficulty)}・${(c.questions||[]).length}題</div>
+          </div>
+          <button class="iconbtn" data-edit="${c.id}">✎</button>
+          <button class="iconbtn del" data-del="${c.id}">🗑</button>
+        </div></div>`).join("");
+    }
+  }else{
+    if(!trainees.length){
+      html+=`<div class="empty"><div class="big">還沒有學員紀錄</div>新進治療師開始作答後會顯示在這裡。</div>`;
+    }else{
+      html+=trainees.slice().sort((a,b)=>a.name.localeCompare(b.name,"zh-Hant")).map(tr=>{
+        const tAttempts=attempts.filter(a=>a.traineeId===tr.id).sort((a,b)=>b.submittedAt-a.submittedAt);
+        const avgPct = tAttempts.length ? Math.round(100*tAttempts.reduce((s,a)=>s+a.score,0)/Math.max(tAttempts.reduce((s,a)=>s+a.maxScore,0),1)) : null;
+        const expanded = adminExpand===tr.id;
+        let block=`<div class="card">
+            <div class="row accordion" data-expand="${tr.id}">
+              <div style="flex:1">
+                <div class="title">${esc(tr.name)}</div>
+                <div class="meta">作答 ${tAttempts.length} 次${avgPct!=null?`・平均 ${avgPct}%`:""}</div>
+              </div>
+              <div class="mini">${expanded?"▲":"▼"}</div>
+            </div>`;
+        if(expanded){
+          if(!tAttempts.length){
+            block+=`<div class="mini" style="margin-top:8px">尚無作答紀錄</div>`;
+          }else{
+            block+=tAttempts.map(a=>{
+              const pct=Math.round(100*a.score/Math.max(a.maxScore,1));
+              const details=a.answers.map(ans=>{
+                if(ans.type==="mcq") return `<div class="mini">・${ans.correct?"✓":"✕"} 選擇題</div>`;
+                return `<div class="mini">・問答：${esc(ans.response||"（未作答）")}</div>`;
+              }).join("");
+              return `<div class="attempt-item">
+                  <div style="display:flex;justify-content:space-between"><b>${esc(a.caseTitle)}</b><span>${pct}%</span></div>
+                  <div class="mini">${fmtDate(a.submittedAt)}</div>
+                  ${details}
+                </div>`;
+            }).join("");
+          }
+        }
+        block+=`</div>`;
+        return block;
+      }).join("");
+    }
+  }
+
+  main.innerHTML=html;
+  main.querySelectorAll("[data-asub]").forEach(b=>b.onclick=()=>{ adminSub=b.dataset.asub; render(); });
+  document.getElementById("adminLock").onclick=()=>{ adminUnlocked=false; localStorage.removeItem(ADMIN_OK_KEY); render(); };
+  const addBtn=document.getElementById("addCase");
+  if(addBtn) addBtn.onclick=()=>openCaseEditor(null);
+  main.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openCaseEditor(b.dataset.edit));
+  main.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
+    if(confirm("確定要刪除這個病例嗎？（已作答的紀錄仍會保留）")){
+      cases=cases.filter(c=>c.id!==b.dataset.del); saveCases(); render();
+    }
+  });
+  main.querySelectorAll("[data-expand]").forEach(el=>el.onclick=()=>{
+    const id=el.dataset.expand; adminExpand = adminExpand===id ? null : id; render();
+  });
+}
+
+/* ----- 病例編輯表單 ----- */
+let editCase=null;
+function openCaseEditor(caseId){
+  editCase = caseId ? clone(cases.find(c=>c.id===caseId)) :
+    {id:uid(), title:"", category:CATS[0], difficulty:DIFFS[0], vignette:{chief:"",history:"",exam:"",imaging:""}, questions:[]};
+  openSheet(caseEditorHTML(!!caseId));
+  bindCaseEditor(!!caseId);
+}
+function caseEditorHTML(isEdit){
+  let h=`<h3>${isEdit?"編輯病例":"新增病例"}</h3>
+    <label>病例標題</label>
+    <input id="ceTitle" value="${esc(editCase.title)}" placeholder="例如：術後全膝關節置換第2週">
+    <label>類別</label>
+    <div class="seg" id="ceCat">${CATS.map(c=>`<button class="${editCase.category===c?'on':''}" data-v="${esc(c)}">${esc(c)}</button>`).join("")}</div>
+    <label>難度</label>
+    <div class="seg" id="ceDiff">${DIFFS.map(d=>`<button class="${editCase.difficulty===d?'on':''}" data-v="${esc(d)}">${esc(d)}</button>`).join("")}</div>
+    <label>主訴</label><textarea id="ceChief">${esc(editCase.vignette.chief)}</textarea>
+    <label>病史</label><textarea id="ceHistory">${esc(editCase.vignette.history)}</textarea>
+    <label>理學檢查</label><textarea id="ceExam">${esc(editCase.vignette.exam)}</textarea>
+    <label>影像／其他檢查</label><textarea id="ceImaging">${esc(editCase.vignette.imaging)}</textarea>
+    <label>問題</label>`;
+  (editCase.questions||[]).forEach((q,qi)=>{
+    h+=`<div class="qedit">
+        <div class="qedit-h"><span class="lbl">${q.type==="mcq"?"選擇題":"問答題"} ${qi+1}</span>
+          <button class="iconbtn del" data-qdel="${qi}">🗑</button></div>
+        <textarea data-qprompt="${qi}" placeholder="題目內容">${esc(q.prompt)}</textarea>`;
+    if(q.type==="mcq"){
+      (q.options||[]).forEach((opt,oi)=>{
+        h+=`<div class="optrow">
+            <div class="radiomark ${q.answerIdx===oi?'on':''}" data-qcorrect="${qi}|${oi}">${q.answerIdx===oi?'✓':''}</div>
+            <input data-qopt="${qi}|${oi}" value="${esc(opt)}" placeholder="選項內容">
+            <button class="iconbtn del" data-qoptdel="${qi}|${oi}">✕</button>
+          </div>`;
+      });
+      h+=`<button class="chip" data-qoptadd="${qi}" style="margin:4px 0">＋ 新增選項</button>
+        <textarea data-qexplain="${qi}" placeholder="正解說明（作答後顯示）">${esc(q.explanation||"")}</textarea>`;
+    }else{
+      h+=`<textarea data-qmodel="${qi}" placeholder="參考答案（作答後顯示，供學員自評）">${esc(q.modelAnswer||"")}</textarea>`;
+    }
+    h+=`</div>`;
+  });
+  h+=`<div style="display:flex;gap:8px;margin-top:6px">
+      <button class="chip" id="addMcq" style="flex:1">＋ 選擇題</button>
+      <button class="chip" id="addOpen" style="flex:1">＋ 問答題</button>
+    </div>`;
+  h+=`<div class="btns"><button class="cancel" id="ceCancel">取消</button><button class="save" id="ceSave">儲存</button></div>`;
+  if(isEdit) h+=`<button class="del" id="ceDel">刪除此病例</button>`;
+  return h;
+}
+function refreshEditorSheet(isEdit){
+  document.getElementById("sheet").innerHTML=caseEditorHTML(isEdit);
+  bindCaseEditor(isEdit);
+}
+function bindCaseEditor(isEdit){
+  document.getElementById("ceTitle").oninput=e=>editCase.title=e.target.value;
+  document.getElementById("ceChief").oninput=e=>editCase.vignette.chief=e.target.value;
+  document.getElementById("ceHistory").oninput=e=>editCase.vignette.history=e.target.value;
+  document.getElementById("ceExam").oninput=e=>editCase.vignette.exam=e.target.value;
+  document.getElementById("ceImaging").oninput=e=>editCase.vignette.imaging=e.target.value;
+  document.getElementById("ceCat").querySelectorAll("button").forEach(b=>b.onclick=()=>{ editCase.category=b.dataset.v; refreshEditorSheet(isEdit); });
+  document.getElementById("ceDiff").querySelectorAll("button").forEach(b=>b.onclick=()=>{ editCase.difficulty=b.dataset.v; refreshEditorSheet(isEdit); });
+
+  document.querySelectorAll("[data-qprompt]").forEach(t=>t.oninput=e=>{ editCase.questions[+t.dataset.qprompt].prompt=e.target.value; });
+  document.querySelectorAll("[data-qexplain]").forEach(t=>t.oninput=e=>{ editCase.questions[+t.dataset.qexplain].explanation=e.target.value; });
+  document.querySelectorAll("[data-qmodel]").forEach(t=>t.oninput=e=>{ editCase.questions[+t.dataset.qmodel].modelAnswer=e.target.value; });
+  document.querySelectorAll("[data-qopt]").forEach(inp=>inp.oninput=e=>{
+    const [qi,oi]=inp.dataset.qopt.split("|"); editCase.questions[+qi].options[+oi]=e.target.value;
+  });
+  document.querySelectorAll("[data-qcorrect]").forEach(b=>b.onclick=()=>{
+    const [qi,oi]=b.dataset.qcorrect.split("|"); editCase.questions[+qi].answerIdx=+oi; refreshEditorSheet(isEdit);
+  });
+  document.querySelectorAll("[data-qoptadd]").forEach(b=>b.onclick=()=>{
+    editCase.questions[+b.dataset.qoptadd].options.push(""); refreshEditorSheet(isEdit);
+  });
+  document.querySelectorAll("[data-qoptdel]").forEach(b=>b.onclick=()=>{
+    const [qi,oi]=b.dataset.qoptdel.split("|"); const q=editCase.questions[+qi];
+    q.options.splice(+oi,1);
+    if(q.answerIdx>=q.options.length) q.answerIdx=0;
+    refreshEditorSheet(isEdit);
+  });
+  document.querySelectorAll("[data-qdel]").forEach(b=>b.onclick=()=>{
+    editCase.questions.splice(+b.dataset.qdel,1); refreshEditorSheet(isEdit);
+  });
+  document.getElementById("addMcq").onclick=()=>{
+    editCase.questions.push({id:uid(),type:"mcq",prompt:"",options:["",""],answerIdx:0,explanation:""});
+    refreshEditorSheet(isEdit);
+  };
+  document.getElementById("addOpen").onclick=()=>{
+    editCase.questions.push({id:uid(),type:"open",prompt:"",modelAnswer:""});
+    refreshEditorSheet(isEdit);
+  };
+  document.getElementById("ceCancel").onclick=closeSheet;
+  document.getElementById("ceSave").onclick=()=>{
+    if(!editCase.title.trim()){ alert("請輸入病例標題"); return; }
+    if(!editCase.questions.length){ alert("請至少新增一題"); return; }
+    for(const q of editCase.questions){
+      if(!q.prompt.trim()){ alert("有題目內容是空的，請補齊"); return; }
+      if(q.type==="mcq" && (q.options||[]).some(o=>!o.trim())){ alert("選擇題的選項內容不能空白"); return; }
+    }
+    const idx=cases.findIndex(c=>c.id===editCase.id);
+    if(idx>=0) cases[idx]=editCase; else cases.push(editCase);
+    saveCases(); closeSheet(); render();
+  };
+  const delBtn=document.getElementById("ceDel");
+  if(delBtn) delBtn.onclick=()=>{
+    if(confirm("確定要刪除這個病例嗎？（已作答的紀錄仍會保留）")){
+      cases=cases.filter(c=>c.id!==editCase.id); saveCases(); closeSheet(); render();
+    }
+  };
+}
+
+/* ===== 啟動 ===== */
+ensureIdentity();
+render();
+cloudInit();
+</script>
+</body>
+</html>
