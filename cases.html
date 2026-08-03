@@ -143,6 +143,8 @@
 
   /* SOAP 病例詳情 */
   .byline{font-size:12px;color:var(--soft);margin-top:4px;}
+  .demoline{font-size:13px;color:var(--ink);margin-top:8px;line-height:1.6;}
+  .demoline .lbl{color:var(--soft);}
   .soapview{background:var(--card2);border-radius:16px;padding:14px;margin-bottom:12px;}
   .soapview-h{font-weight:800;color:var(--teal-deep);font-size:14px;margin-bottom:8px;}
   .soapline{margin-bottom:8px;}
@@ -258,6 +260,18 @@ function esc(s){return String(s??"").replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;
 function clone(o){ return JSON.parse(JSON.stringify(o)); }
 function fmtDate(ts){ if(!ts) return ""; const d=new Date(ts); return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; }
 function blankRound(label){ return {id:uid(), label:label||"", s:[], general:{o:"",a:"",p:""}, items:[]}; }
+function blankDemo(){ return {gender:"", age:"", occupation:"", chronicHas:false, chronicDetail:"", sport:"", exerciseFreq:""}; }
+function demoSummary(d){
+  if(!d) return "";
+  const parts=[];
+  if(d.gender) parts.push(d.gender);
+  if(d.age) parts.push(d.age+"歲");
+  if(d.occupation) parts.push(d.occupation);
+  parts.push(d.chronicHas ? `慢性病：${d.chronicDetail||"有"}` : "無慢性病");
+  if(d.sport) parts.push(d.sport+(d.exerciseFreq?`（${d.exerciseFreq}）`:""));
+  else if(d.exerciseFreq) parts.push(d.exerciseFreq);
+  return parts.join("・");
+}
 const CIRCLE_NUMS=["","①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩","⑪","⑫","⑬","⑭","⑮","⑯","⑰","⑱","⑲","⑳"];
 function circleNum(n){ return CIRCLE_NUMS[n] || `(${n})`; }
 /* 舊資料相容：S 欄位曾經是單一字串、O/A/P 曾經是單一共用字串，統一轉成
@@ -283,6 +297,8 @@ function normalizeCase(c){
     if(r.items.length > r.s.length) r.items.length = r.s.length;
   });
   if(typeof c.discussion!=="string") c.discussion="";
+  if(!c.demographics || typeof c.demographics!=="object") c.demographics=blankDemo();
+  else c.demographics=Object.assign(blankDemo(), c.demographics);
   return c;
 }
 
@@ -292,6 +308,7 @@ function seedCases(){
     {
       id:uid(), title:"右側腰背緊繃合併肩舉受限（案例示範：多輪 SOAP 假設檢驗）",
       createdBy:{id:"seed", name:"系統範例"}, createdAt:Date.now(),
+      demographics:{gender:"男", age:"28", occupation:"上班族", chronicHas:false, chronicDetail:"", sport:"重量訓練", exerciseFreq:"每週2-3次"},
       soapRounds:[
         {
           id:uid(), label:"初次評估與快速治療測試",
@@ -336,6 +353,7 @@ function seedCases(){
     {
       id:uid(), title:"肩關節術後夾擠症狀（案例示範：含測驗題）",
       createdBy:{id:"seed", name:"系統範例"}, createdAt:Date.now()-1000,
+      demographics:{gender:"女", age:"45", occupation:"", chronicHas:false, chronicDetail:"", sport:"", exerciseFreq:"平時少運動"},
       soapRounds:[
         {
           id:uid(), label:"初次評估",
@@ -501,11 +519,13 @@ function renderLibrary(){
       const rounds=(c.soapRounds||[]).length;
       const hasQuiz=(c.questions||[]).length>0;
       const mine=canEdit(c);
+      const d=c.demographics||{};
+      const quickDemo=[d.gender, d.age?d.age+"歲":""].filter(Boolean).join("・");
       return `<div class="card">
         <div class="row" data-open="${c.id}" style="cursor:pointer">
           <div style="flex:1">
             <div class="title">📋 ${esc(c.title)}</div>
-            <div class="byline">由 ${esc(c.createdBy?c.createdBy.name:"未知")} 建立・${fmtDate(c.createdAt)}</div>
+            <div class="byline">由 ${esc(c.createdBy?c.createdBy.name:"未知")} 建立・${fmtDate(c.createdAt)}${quickDemo?`　👤 ${esc(quickDemo)}`:""}</div>
             <div style="margin-top:6px">
               <span class="tag mute">共 ${rounds} 輪 SOAP</span>
               ${hasQuiz?`<span class="tag">附測驗</span>`:`<span class="tag mute">僅供閱讀</span>`}
@@ -553,9 +573,11 @@ function renderQuiz(){
       <button class="chip" id="backLib">‹ 返回病例庫</button>
       ${canEdit(c)?`<button class="chip" id="editThis">✎ 編輯</button>`:""}
     </div>`;
+  const demoText=demoSummary(c.demographics);
   html+=`<div class="card" style="margin-bottom:10px">
       <div class="title">📋 ${esc(c.title)}</div>
       <div class="byline">由 ${esc(c.createdBy?c.createdBy.name:"未知")} 建立・${fmtDate(c.createdAt)}</div>
+      ${demoText?`<div class="demoline"><span class="lbl">👤 </span>${esc(demoText)}</div>`:""}
     </div>`;
 
   (c.soapRounds||[]).forEach((r,ri)=>{
@@ -814,8 +836,9 @@ function openCaseEditor(caseId){
     if(!canEdit(src)){ alert("這不是你建立的病例，且管理後台尚未解鎖，無法編輯。"); return; }
     editCase = clone(src);
   }else{
-    editCase = {id:uid(), title:"", createdBy:{id:myId,name:myName}, createdAt:Date.now(), soapRounds:[blankRound("初次評估")], discussion:"", questions:[]};
+    editCase = {id:uid(), title:"", createdBy:{id:myId,name:myName}, createdAt:Date.now(), demographics:blankDemo(), soapRounds:[blankRound("初次評估")], discussion:"", questions:[]};
   }
+  if(!editCase.demographics) editCase.demographics=blankDemo();
   openSheet(caseEditorHTML(!!caseId));
   bindCaseEditor(!!caseId);
 }
@@ -823,7 +846,26 @@ function caseEditorHTML(isEdit){
   let h=`<h3>${isEdit?"編輯病例":"新增病例"}</h3>
     <div class="mini" style="margin-bottom:6px">用 SOAP（主觀 S／客觀 O／評估 A／處置 P）記錄病例，一輪代表一次評估或介入循環，可以無限新增輪次，每格都是自由文字，想怎麼寫都可以。</div>
     <label>病例標題</label>
-    <input id="ceTitle" value="${esc(editCase.title)}" placeholder="例如：右側腰背緊繃合併肩舉受限">
+    <input id="ceTitle" value="${esc(editCase.title)}" placeholder="例如：2026/08/04 明德 右側肩膀">
+    <div class="soapedit" style="margin-top:14px">
+      <label style="margin-top:0">基本資料（選填）</label>
+      <label style="margin:10px 0 3px">性別</label>
+      <div class="seg" id="ceGender">${["男","女","其他"].map(g=>`<button type="button" data-v="${g}" class="${editCase.demographics.gender===g?'on':''}">${g}</button>`).join("")}</div>
+      <label>年齡</label>
+      <input id="ceAge" value="${esc(editCase.demographics.age)}" placeholder="例如：35" inputmode="numeric">
+      <label>職業</label>
+      <input id="ceOcc" value="${esc(editCase.demographics.occupation)}" placeholder="例如：工程師">
+      <label>慢性病</label>
+      <div class="seg" id="ceChronic">
+        <button type="button" data-v="0" class="${editCase.demographics.chronicHas?'':'on'}">無</button>
+        <button type="button" data-v="1" class="${editCase.demographics.chronicHas?'on':''}">有</button>
+      </div>
+      ${editCase.demographics.chronicHas?`<input id="ceChronicDetail" value="${esc(editCase.demographics.chronicDetail)}" placeholder="例如：高血壓、糖尿病" style="margin-top:8px">`:""}
+      <label>運動項目</label>
+      <input id="ceSport" value="${esc(editCase.demographics.sport)}" placeholder="例如：路跑、重量訓練、羽球">
+      <label>運動頻率</label>
+      <input id="ceFreq" value="${esc(editCase.demographics.exerciseFreq)}" placeholder="例如：每週3次，每次1小時">
+    </div>
     <label>SOAP 輪次</label>`;
   (editCase.soapRounds||[]).forEach((r,ri)=>{
     h+=`<div class="soapedit">
@@ -904,6 +946,21 @@ function refreshEditorSheet(isEdit){
 function bindCaseEditor(isEdit){
   document.getElementById("ceTitle").oninput=e=>editCase.title=e.target.value;
   document.getElementById("ceDiscuss").oninput=e=>editCase.discussion=e.target.value;
+
+  document.querySelectorAll("#ceGender button").forEach(b=>b.onclick=()=>{
+    editCase.demographics.gender = editCase.demographics.gender===b.dataset.v ? "" : b.dataset.v;
+    refreshEditorSheet(isEdit);
+  });
+  document.getElementById("ceAge").oninput=e=>editCase.demographics.age=e.target.value;
+  document.getElementById("ceOcc").oninput=e=>editCase.demographics.occupation=e.target.value;
+  document.querySelectorAll("#ceChronic button").forEach(b=>b.onclick=()=>{
+    editCase.demographics.chronicHas = b.dataset.v==="1";
+    refreshEditorSheet(isEdit);
+  });
+  const chronicDetailEl=document.getElementById("ceChronicDetail");
+  if(chronicDetailEl) chronicDetailEl.oninput=e=>editCase.demographics.chronicDetail=e.target.value;
+  document.getElementById("ceSport").oninput=e=>editCase.demographics.sport=e.target.value;
+  document.getElementById("ceFreq").oninput=e=>editCase.demographics.exerciseFreq=e.target.value;
 
   function autoGrow(el){ el.style.height="auto"; el.style.height=(el.scrollHeight+2)+"px"; }
   document.querySelectorAll("[data-rlabel]").forEach(inp=>inp.oninput=e=>{ editCase.soapRounds[+inp.dataset.rlabel].label=e.target.value; });
