@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>病例訓練系統</title>
+<!--
+  使用說明（與旅遊／居家 app 共用同一個 Firebase 專案，但資料存在不同的 collection，互不干擾）
+  1. 下面 FIREBASE_CONFIG 與旅遊/居家 app 相同 → 自動共用同一個資料庫。
+  2. 訓練資料存在 training/{隱蔽碼}，跟 travel/{...}、home/{...} 是不同文件，不會互相覆蓋。
+  3. 沒網路時自動只用本機儲存，照常可用。
+  4. 病例內容目前是空的框架 + 2 個示範病例，之後可在「病例庫」頁用「＋ 新增病例」慢慢建立你自己的題庫。
+-->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyDu8fQdFy2nu31VHYhhrj-q93V-U69nlVE",
+    authDomain: "my-life-eba23.firebaseapp.com",
+    projectId: "my-life-eba23",
+    storageBucket: "my-life-eba23.firebasestorage.app",
+    messagingSenderId: "564889264526",
+    appId: "1:564889264526:web:ccb6ab2c3794b18a3484df"
+  };
+
+  window.__db = null;
+  window.__hasFB = false;
+  try {
+    if (FIREBASE_CONFIG && FIREBASE_CONFIG.projectId) {
+      firebase.initializeApp(FIREBASE_CONFIG);
+      window.__db = firebase.firestore();
+      window.__hasFB = true;
+    }
+  } catch (e) {
+    console.warn("Firebase 初始化失敗，改用本機儲存", e);
+    window.__db = null; window.__hasFB = false;
+  }
+</script>
+
+<style>
+  :root{
+    /* 臨床藍紫色系 — 與旅遊(天藍)、居家(綠植)區隔 */
+    --paper:#f4f5fa;
+    --ink:#33364a;
+    --soft:#8a8da3;
+    --line:#e1e2ef;
+    --card:#ffffff;
+    --card2:#edeef9;
+    --main:#5b63c4;
+    --main-deep:#42499a;
+    --main-soft:#e0e2f8;
+    --teal:#3aa6a0;
+    --teal-soft:#dcf1ef;
+    --warn:#e2a45c;
+    --warn-soft:#f6e3cd;
+    --ok:#3f9e74; --ok-soft:#e2f3ea;
+    --err:#cf6b5b; --err-soft:#fbeae7;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Microsoft JhengHei",sans-serif;
+    font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:600px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;}
+
+  header{padding:18px 16px 8px;}
+  .htop{display:flex;align-items:center;justify-content:space-between;}
+  h1{font-size:20px;margin:0;font-weight:800;letter-spacing:.5px;}
+  .sync-badge{font-size:12px;padding:4px 10px;border-radius:12px;background:var(--card2);color:var(--soft);white-space:nowrap;}
+  .sync-badge.ok{color:var(--ok);} .sync-badge.err{color:var(--err);}
+  .sync-badge.loading{color:var(--main);}
+
+  .wholine{display:flex;align-items:center;justify-content:space-between;margin-top:8px;
+    background:var(--card2);border-radius:12px;padding:8px 12px;font-size:13px;}
+  .wholine b{color:var(--main-deep);}
+  .whoBtn{border:none;background:var(--main);color:#fff;font-size:12px;font-weight:700;
+    padding:5px 11px;border-radius:10px;cursor:pointer;}
+
+  .tabs{display:flex;gap:6px;padding:10px 16px 4px;flex-wrap:wrap;}
+  .tab{flex:1;min-width:96px;text-align:center;padding:9px 0;border:2px solid var(--line);border-radius:16px;
+    background:var(--card);color:var(--soft);font-size:13px;font-weight:700;cursor:pointer;transition:.15s;}
+  .tab.on{background:var(--main);color:#fff;border-color:var(--main);}
+
+  main{flex:1;padding:8px 16px 96px;overflow-y:auto;}
+  .countLine{font-size:13px;color:var(--soft);margin:6px 2px 12px;}
+
+  .card{background:var(--card);border:2px solid var(--line);border-radius:18px;padding:14px;margin-bottom:12px;}
+  .card .row{display:flex;align-items:flex-start;gap:10px;}
+  .card .title{font-weight:700;font-size:16px;flex:1;}
+  .card .meta{font-size:13px;color:var(--soft);margin-top:3px;}
+  .tag{display:inline-block;background:var(--main-soft);color:var(--main-deep);font-size:12px;
+    padding:2px 9px;border-radius:10px;margin:4px 4px 0 0;font-weight:700;}
+  .tag.lvl{background:var(--teal-soft);color:#1f6f6a;}
+  .tag.done{background:var(--ok-soft);color:var(--ok);}
+  .tag.todo{background:var(--card2);color:var(--soft);}
+  .mini{font-size:12px;color:var(--soft);}
+
+  .empty{text-align:center;color:var(--soft);padding:48px 16px;}
+  .empty .big{font-size:17px;font-weight:700;color:var(--ink);margin-bottom:6px;}
+
+  .chip-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
+  .chip{padding:6px 12px;border:2px solid var(--line);border-radius:14px;background:var(--card);
+    color:var(--soft);font-size:13px;font-weight:700;cursor:pointer;}
+  .chip.on{background:var(--main-soft);border-color:var(--main);color:var(--main-deep);}
+
+  .fab{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);max-width:568px;width:calc(100% - 32px);
+    background:var(--main);color:#fff;border:none;border-radius:18px;padding:15px;font-size:16px;font-weight:800;
+    box-shadow:0 6px 20px rgba(66,73,154,.35);cursor:pointer;z-index:30;}
+
+  .mask{position:fixed;inset:0;background:rgba(40,40,60,.45);z-index:40;display:none;}
+  .mask.on{display:block;}
+  .sheet{position:fixed;left:0;right:0;bottom:0;background:var(--paper);z-index:50;border-radius:22px 22px 0 0;
+    padding:20px 18px calc(20px + env(safe-area-inset-bottom));max-width:600px;margin:0 auto;
+    transform:translateY(100%);transition:.25s;max-height:90vh;overflow-y:auto;}
+  .sheet.on{transform:translateY(0);}
+  .sheet h3{margin:0 0 14px;font-size:18px;}
+  .sheet h4{margin:18px 0 8px;font-size:14px;color:var(--main-deep);border-top:2px solid var(--line);padding-top:14px;}
+  label{display:block;font-size:13px;color:var(--soft);font-weight:700;margin:12px 0 5px;}
+  input,select,textarea{width:100%;border:2px solid var(--line);border-radius:13px;padding:11px;font-size:15px;
+    background:var(--card);color:var(--ink);font-family:inherit;}
+  textarea{resize:vertical;min-height:64px;}
+  .seg{display:flex;gap:6px;flex-wrap:wrap;}
+  .seg button{flex:1;min-width:64px;padding:10px;border:2px solid var(--line);border-radius:13px;background:var(--card);
+    color:var(--soft);font-weight:700;cursor:pointer;font-size:14px;}
+  .seg button.on{background:var(--main);color:#fff;border-color:var(--main);}
+  .btns{display:flex;gap:10px;margin-top:18px;}
+  .btns button{flex:1;padding:13px;border-radius:14px;font-size:16px;font-weight:800;cursor:pointer;border:2px solid var(--line);}
+  .btns .save{background:var(--main);color:#fff;border-color:var(--main);}
+  .btns .cancel{background:var(--card);color:var(--soft);}
+  .del{width:100%;margin-top:10px;padding:12px;border-radius:14px;border:2px solid var(--err);
+    background:var(--card);color:var(--err);font-weight:800;font-size:15px;cursor:pointer;}
+
+  .qblock{background:var(--card);border:2px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;}
+  .qblock .qhead{display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:13px;color:var(--main-deep);}
+  .qblock .optrow{display:flex;align-items:center;gap:8px;margin-top:8px;}
+  .qblock .optrow input[type=text]{flex:1;}
+  .qdel{border:none;background:none;color:var(--err);font-size:13px;font-weight:700;cursor:pointer;}
+  .addq{width:100%;border:2px dashed var(--main);background:var(--card);color:var(--main-deep);
+    border-radius:14px;padding:10px;font-weight:700;cursor:pointer;margin-top:4px;}
+
+  .phasetabs{display:flex;gap:6px;margin-bottom:14px;}
+  .phasetab{flex:1;padding:9px 4px;border:2px solid var(--line);border-radius:13px;background:var(--card);
+    color:var(--soft);font-size:13px;font-weight:700;cursor:pointer;text-align:center;}
+  .phasetab.cur{background:var(--main);color:#fff;border-color:var(--main);}
+
+  .infobox{background:var(--card);border:2px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px;}
+  .infobox h4{margin:0 0 6px;font-size:14px;color:var(--main-deep);}
+  .infobox p{margin:0 0 10px;white-space:pre-wrap;}
+  .patientline{background:var(--card2);border-radius:12px;padding:10px 12px;font-size:14px;margin-bottom:12px;font-weight:600;}
+
+  .quizq{background:var(--card);border:2px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px;}
+  .quizq .qtext{font-weight:700;margin-bottom:10px;}
+  .opt{display:flex;align-items:center;gap:10px;padding:9px 10px;border:2px solid var(--line);border-radius:12px;
+    margin-bottom:7px;cursor:pointer;font-size:14px;}
+  .opt.sel{border-color:var(--main);background:var(--main-soft);}
+  .opt.right{border-color:var(--ok);background:var(--ok-soft);font-weight:700;}
+  .opt.wrong{border-color:var(--err);background:var(--err-soft);font-weight:700;}
+  .opt input{width:auto;flex-shrink:0;}
+  .explain{margin-top:8px;background:var(--card2);border-radius:10px;padding:9px 11px;font-size:13px;color:var(--ink);}
+
+  .scorebox{background:linear-gradient(135deg,var(--main-soft),var(--card2));border:2px solid var(--main);
+    border-radius:16px;padding:16px;margin-bottom:14px;text-align:center;}
+  .scorebox .big{font-size:28px;font-weight:800;color:var(--main-deep);}
+
+  .soapgrid label{margin-top:14px;}
+  .refbox{background:var(--card2);border-radius:12px;padding:11px 13px;font-size:13px;white-space:pre-wrap;margin-top:6px;}
+  .ratebtns{display:flex;gap:8px;margin-top:14px;}
+  .ratebtns button{flex:1;padding:11px 4px;border-radius:13px;border:2px solid var(--line);background:var(--card);
+    font-size:13px;font-weight:700;cursor:pointer;color:var(--soft);}
+  .ratebtns button.good.on{background:var(--ok-soft);border-color:var(--ok);color:var(--ok);}
+  .ratebtns button.mid.on{background:var(--warn-soft);border-color:var(--warn);color:#a96a26;}
+  .ratebtns button.low.on{background:var(--err-soft);border-color:var(--err);color:var(--err);}
+
+  table.ptable{width:100%;border-collapse:collapse;font-size:13px;}
+  table.ptable th,table.ptable td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);}
+  table.ptable th{color:var(--soft);font-weight:700;font-size:12px;}
+  .barwrap{background:var(--card2);border-radius:8px;overflow:hidden;height:8px;margin-top:4px;}
+  .bar{background:var(--main);height:100%;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="htop">
+      <h1>🩺 病例訓練系統</h1>
+      <span id="syncBadge" class="sync-badge"></span>
+    </div>
+    <div class="wholine">
+      <span>👤 目前：<b id="whoName">尚未設定</b></span>
+      <button class="whoBtn" id="whoSwitch">切換／新增</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab on" data-view="lib">病例庫</button>
+    <button class="tab" data-view="progress">進度總覽</button>
+  </div>
+
+  <main id="main"></main>
+
+  <button class="fab" id="fab">＋ 新增病例</button>
+</div>
+
+<div class="mask" id="mask"></div>
+<div class="sheet" id="sheet"></div>
+
+<script>
+/* ===== 本機儲存 key ===== */
+const C_KEY="tr_cases", TN_KEY="tr_trainees", A_KEY="tr_attempts", CUR_KEY="tr_current";
+
+let cases    = load(C_KEY,null);
+let trainees = load(TN_KEY,[]);
+let attempts = load(A_KEY,[]);
+let currentTraineeId = load(CUR_KEY,null);
+
+if(!Array.isArray(cases)) cases = seedCases();
+
+const CATS = ["骨科","神經","小兒","其他"];
+const LEVELS = ["初階","中階","進階"];
+
+let view = "lib";              // lib | progress
+let libNav = "list";           // list | detail
+let openCaseId = null;
+let caseTab = "info";          // info | quiz | soap
+let catFilter = "全部", lvlFilter = "全部";
+
+// 作答中的暫存狀態（未送出前不存檔）
+let quizAnswers = {};   // { caseId: { qIdx: optIdx } }
+let quizShown   = {};   // { caseId: true }  是否已送出顯示結果
+let soapDrafts  = {};   // { caseId: {s,o,a,p} }
+let soapRefShown= {};   // { caseId: true }
+
+function load(k,d){ try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d} }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function esc(s){return String(s??"").replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));}
+function nl2br(s){ return esc(s).replace(/\n/g,"<br>"); }
+
+function saveCases(){ localStorage.setItem(C_KEY,JSON.stringify(cases)); cloudPush(); }
+function saveTrainees(){ localStorage.setItem(TN_KEY,JSON.stringify(trainees)); cloudPush(); }
+function saveAttempts(){ localStorage.setItem(A_KEY,JSON.stringify(attempts)); cloudPush(); }
+function setCurrent(id){ currentTraineeId=id; localStorage.setItem(CUR_KEY,JSON.stringify(id)); }
+
+/* ===== 示範病例（框架已完成，內容之後可在 App 裡慢慢新增） ===== */
+function seedCases(){
+  return [
+    {
+      id:uid(), title:"五十肩（沾黏性肩關節囊炎）", category:"骨科", difficulty:"初階",
+      patient:{age:"52",gender:"女",occupation:"家管",chief:"右肩疼痛合併活動受限3個月，穿脫衣服、綁頭髮困難"},
+      history:"無明顯外傷病史，症狀漸進性加重。夜間疼痛明顯，影響睡眠。尚未確認是否有糖尿病史（糖尿病為五十肩危險因子之一）。",
+      exam:"肩關節主動與被動關節活動度皆受限，外轉與外展角度受限最明顯（呈capsular pattern）；未見明顯紅腫熱；肌力因疼痛受限測試不完全，未見明顯肌力下降。",
+      soap:{
+        s:"主訴右肩疼痛合併活動受限3個月，影響穿脫衣、綁頭髮等ADL，夜間痛明顯。",
+        o:"AROM/PROM皆受限，呈capsular pattern（外轉>外展>內轉）；未見紅腫熱；肌力因疼痛受限難以完整評估。",
+        a:"表現符合沾黏性肩關節囊炎（五十肩）凍結期，需與旋轉肌袖病變、頸因性轉移痛做鑑別。",
+        p:"衛教病程與居家姿勢/活動建議；疼痛控制（如熱敷、TENS視情況）；輕柔關節活動度訓練，避免過度伸展刺激；依病程進展調整治療強度，追蹤ROM與疼痛變化。"
+      },
+      quiz:[
+        {q:"此個案最可能的診斷為？",options:["五十肩（沾黏性肩關節囊炎）","旋轉肌袖破裂","肩峰下夾擠症候群","頸神經根病變"],correct:0,
+         explain:"主動與被動ROM皆受限（capsular pattern：外轉>外展>內轉受限）是沾黏性肩關節囊炎的典型表現，與旋轉肌袖破裂（通常只有主動ROM受限、被動較正常）不同。"},
+        {q:"此個案目前處於凍結期，治療初期的首要目標為何？",options:["大力伸展關節囊以恢復角度","積極高強度肌力訓練","疼痛控制與維持可用的關節活動度","立即轉介手術評估"],correct:2,
+         explain:"凍結期以疼痛控制、輕柔關節活動、姿勢與病程衛教為主，過度積極的伸展手法容易加劇發炎與疼痛。"},
+        {q:"下列何者是五十肩已知的危險因子？",options:["糖尿病","年輕男性","高強度重訓習慣","近期骨折"],correct:0,
+         explain:"糖尿病、甲狀腺疾病、長期肩關節制動與五十肩的發生率相關性較高，臨床上應主動詢問病史。"}
+      ]
+    },
+    {
+      id:uid(), title:"急性下背痛（搬重物後）", category:"骨科", difficulty:"初階",
+      patient:{age:"34",gender:"男",occupation:"倉儲搬運員",chief:"彎腰搬重物後下背劇痛3天，無法久坐久站"},
+      history:"3天前搬重物時腰部突然劇痛，之後下背僵硬合併活動受限，未合併下肢麻木無力，無大小便功能異常，無外傷跌倒病史。",
+      exam:"腰椎前彎/後仰活動度受限合併疼痛；直膝抬腿測試(SLR)雙側陰性；下肢肌力、感覺、反射皆正常；未見紅旗警訊症狀。",
+      soap:{
+        s:"主訴3天前搬重物後下背劇痛，影響久坐久站，無下肢麻木無力或二便功能異常。",
+        o:"腰椎AROM前彎/後仰受限合併疼痛；SLR雙側(-)；下肢神經學檢查(肌力/感覺/反射)正常；無紅旗症狀。",
+        a:"符合非特異性急性下背痛(機械性)，目前無神經學症狀，紅旗篩檢陰性。",
+        p:"衛教避免臥床休息、鼓勵維持日常活動；疼痛控制；漸進式腰部活動與核心穩定訓練；監測是否出現下肢神經學症狀或紅旗警訊並適時轉介。"
+      },
+      quiz:[
+        {q:"此個案下背痛的評估中，應優先篩檢哪一類警訊(red flag)？",options:["馬尾症候群相關症狀（大小便失禁、會陰麻木）","姿勢不良","單純肌肉緊繃","工作壓力大"],correct:0,
+         explain:"急性下背痛須先篩檢red flags，包含馬尾症候群、腫瘤病史、外傷骨折、感染徵象等，此案例雖無陽性紅旗，仍應例行詢問並記錄。"},
+        {q:"直膝抬腿測試(SLR)雙側陰性，代表什麼？",options:["較不支持神經根壓迫，但不能完全排除","確診椎間盤突出","需要立即手術","代表下肢肌力嚴重下降"],correct:0,
+         explain:"SLR陰性降低神經根牽扯/壓迫的可能性，但仍須綜合其他神經學檢查與病史判斷，不能單靠一項測試確診或排除。"},
+        {q:"急性期(小於2週)的下背痛，治療原則應為？",options:["絕對臥床休息1-2週","鼓勵維持日常活動並漸進恢復","立即進行高強度核心訓練","完全避免任何活動直到完全不痛"],correct:1,
+         explain:"現行實證建議急性下背痛應避免長期臥床休息，鼓勵在可忍受範圍內維持日常活動，有助於更快恢復並降低慢性化風險。"}
+      ]
+    }
+  ];
+}
+
+/* ===== Firebase 雲端同步 ===== */
+// 訓練資料存 training/{隱蔽碼}，與 travel/home 是不同文件，互不干擾。
+const SHARE_DOC = "9f2d7b6e0a1c4358b7e2f61d0c9a4e83";
+const cloudRef = window.__db ? window.__db.collection("training").doc(SHARE_DOC) : null;
+
+let cloudReady=false, cloudSkipPush=false, cloudTimer=null;
+
+function cloudPush(){
+  if(!cloudRef) return;
+  if(cloudSkipPush){ cloudSkipPush=false; return; }
+  if(!cloudReady) return;
+  clearTimeout(cloudTimer);
+  cloudTimer=setTimeout(()=>{
+    cloudRef.set({ cases, trainees, attempts, updatedAt:Date.now() })
+      .then(()=>setSyncBadge("ok"))
+      .catch(e=>{ console.warn("雲端儲存失敗",e); setSyncBadge("err"); });
+  },800);
+}
+function cloudInit(){
+  if(!cloudRef){ setSyncBadge("local"); return; }
+  setSyncBadge("loading");
+  cloudRef.onSnapshot(snap=>{
+    if(snap.exists){
+      const d=snap.data();
+      cloudSkipPush=true;
+      if(Array.isArray(d.cases) && d.cases.length) cases=d.cases;
+      if(Array.isArray(d.trainees)) trainees=d.trainees;
+      if(Array.isArray(d.attempts)) attempts=d.attempts;
+      localStorage.setItem(C_KEY,JSON.stringify(cases));
+      localStorage.setItem(TN_KEY,JSON.stringify(trainees));
+      localStorage.setItem(A_KEY,JSON.stringify(attempts));
+      cloudReady=true; setSyncBadge("ok"); render();
+    }else{
+      cloudReady=true;
+      cloudRef.set({ cases, trainees, attempts, updatedAt:Date.now() })
+        .then(()=>setSyncBadge("ok")).catch(()=>setSyncBadge("err"));
+    }
+  }, err=>{ console.warn("雲端讀取失敗",err); setSyncBadge("err"); cloudReady=false; });
+}
+function setSyncBadge(state){
+  const el=document.getElementById("syncBadge"); if(!el) return;
+  const map={loading:"☁️ 同步中…",ok:"☁️ 已同步",err:"⚠️ 同步異常",local:"📵 本機模式"};
+  el.textContent=map[state]||""; el.className="sync-badge "+state;
+}
+
+/* ===== render dispatcher ===== */
+function render(){
+  renderWho();
+  const fab=document.getElementById("fab");
+  fab.style.display = (view==="lib" && libNav==="list") ? "block" : "none";
+  fab.textContent="＋ 新增病例";
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on", t.dataset.view===view));
+  if(view==="lib"){ libNav==="detail" ? renderCaseDetail() : renderLib(); }
+  else renderProgress();
+}
+function renderWho(){
+  const t=trainees.find(x=>x.id===currentTraineeId);
+  document.getElementById("whoName").textContent = t ? t.name : "尚未設定";
+}
+
+/* ===== 學員切換 ===== */
+function openWhoSheet(){
+  const mask=document.getElementById("mask"), sheet=document.getElementById("sheet");
+  mask.classList.add("on"); sheet.classList.add("on");
+  const rows = trainees.map(t=>`
+    <div class="chip ${t.id===currentTraineeId?'on':''}" data-pick="${t.id}" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;width:100%">
+      <span>${esc(t.name)}</span><span data-del="${t.id}" style="color:var(--err);font-weight:700;padding:2px 8px">✕</span>
+    </div>`).join("");
+  sheet.innerHTML=`<h3>切換／新增受訓學員</h3>
+    ${trainees.length? `<div style="margin-bottom:14px">${rows}</div>` : `<div class="mini" style="margin-bottom:14px">目前還沒有任何學員，請先新增一位。</div>`}
+    <label>新增學員姓名／代號</label>
+    <input id="newWhoName" placeholder="例如：王小美 / 治療師A">
+    <div class="btns">
+      <button class="cancel" id="whoCancel">取消</button>
+      <button class="save" id="whoAdd">新增並切換</button>
+    </div>`;
+  sheet.querySelectorAll('[data-pick]').forEach(el=>el.onclick=(ev)=>{
+    if(ev.target.dataset.del) return;
+    setCurrent(el.dataset.pick); closeSheet(); render();
+  });
+  sheet.querySelectorAll('[data-del]').forEach(el=>el.onclick=(ev)=>{
+    ev.stopPropagation();
+    const id=el.dataset.del;
+    if(!confirm("確定刪除這位學員？其練習紀錄也會一併移除。")) return;
+    trainees=trainees.filter(t=>t.id!==id);
+    attempts=attempts.filter(a=>a.traineeId!==id);
+    saveTrainees(); saveAttempts();
+    if(currentTraineeId===id) setCurrent(trainees[0]?trainees[0].id:null);
+    openWhoSheet();
+  });
+  document.getElementById("whoCancel").onclick=closeSheet;
+  document.getElementById("whoAdd").onclick=()=>{
+    const name=document.getElementById("newWhoName").value.trim();
+    if(!name){ alert("請輸入姓名或代號"); return; }
+    const t={id:uid(),name,createdAt:Date.now()};
+    trainees.push(t); saveTrainees(); setCurrent(t.id);
+    closeSheet(); render();
+  };
+}
+function closeSheet(){
+  document.getElementById("mask").classList.remove("on");
+  document.getElementById("sheet").classList.remove("on");
+}
+
+/* ===== 病例庫列表 ===== */
+function myStatusTags(c){
+  if(!currentTraineeId) return "";
+  const q=attempts.find(a=>a.traineeId===currentTraineeId&&a.caseId===c.id&&a.mode==="quiz");
+  const s=attempts.find(a=>a.traineeId===currentTraineeId&&a.caseId===c.id&&a.mode==="soap");
+  let html="";
+  html+= q ? `<span class="tag done">測驗 ${q.score}/${q.total}</span>` : `<span class="tag todo">測驗未做</span>`;
+  html+= s ? `<span class="tag done">SOAP：${rateLabel(s.rating)}</span>` : `<span class="tag todo">SOAP未做</span>`;
+  return html;
+}
+function rateLabel(r){ return r==="good"?"掌握良好":r==="mid"?"普通":r==="low"?"待加強":"已練習"; }
+
+function renderLib(){
+  const main=document.getElementById("main");
+  const filtered=cases.filter(c=>(catFilter==="全部"||c.category===catFilter)&&(lvlFilter==="全部"||c.difficulty===lvlFilter));
+  let html=`<div class="chip-row">
+    ${["全部",...CATS].map(c=>`<span class="chip ${catFilter===c?'on':''}" data-cat="${esc(c)}">${esc(c)}</span>`).join("")}
+  </div>
+  <div class="chip-row">
+    ${["全部",...LEVELS].map(l=>`<span class="chip ${lvlFilter===l?'on':''}" data-lvl="${esc(l)}">${esc(l)}</span>`).join("")}
+  </div>
+  <div class="countLine">共 ${filtered.length} 個病例</div>`;
+
+  if(!filtered.length){
+    html+=`<div class="empty"><div class="big">目前沒有符合條件的病例</div>按下方「＋ 新增病例」開始建立你的第一個訓練病例。</div>`;
+  }else{
+    html+=filtered.map(c=>`
+      <div class="card" data-open="${c.id}">
+        <div class="row">
+          <div style="flex:1">
+            <div class="title">${esc(c.title)}</div>
+            <div class="meta">${esc(c.patient?.chief||"")}</div>
+            <div style="margin-top:6px">
+              <span class="tag">${esc(c.category)}</span>
+              <span class="tag lvl">${esc(c.difficulty)}</span>
+              ${myStatusTags(c)}
+            </div>
+          </div>
+          <div class="mini" style="align-self:center">›</div>
+        </div>
+      </div>`).join("");
+  }
+  main.innerHTML=html;
+  main.querySelectorAll('[data-cat]').forEach(el=>el.onclick=()=>{ catFilter=el.dataset.cat; renderLib(); });
+  main.querySelectorAll('[data-lvl]').forEach(el=>el.onclick=()=>{ lvlFilter=el.dataset.lvl; renderLib(); });
+  main.querySelectorAll('[data-open]').forEach(el=>el.onclick=()=>{
+    openCaseId=el.dataset.open; libNav="detail"; caseTab="info"; render();
+  });
+}
+
+/* ===== 病例詳情 ===== */
+function renderCaseDetail(){
+  const main=document.getElementById("main");
+  const c=cases.find(x=>x.id===openCaseId);
+  if(!c){ libNav="list"; render(); return; }
+
+  let html=`<div class="card" style="background:var(--card2);border:none;margin-bottom:14px">
+      <div class="row"><div style="flex:1">
+        <div class="title">${esc(c.title)}</div>
+        <div style="margin-top:6px"><span class="tag">${esc(c.category)}</span><span class="tag lvl">${esc(c.difficulty)}</span></div>
+      </div></div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="chip" data-back="1">‹ 返回病例庫</button>
+        <button class="chip" data-edit="1">✎ 編輯</button>
+      </div>
+    </div>`;
+  html+=`<div class="phasetabs">
+      <button class="phasetab ${caseTab==='info'?'cur':''}" data-tab="info">情境資訊</button>
+      <button class="phasetab ${caseTab==='quiz'?'cur':''}" data-tab="quiz">測驗</button>
+      <button class="phasetab ${caseTab==='soap'?'cur':''}" data-tab="soap">SOAP筆記</button>
+    </div>`;
+
+  if(caseTab==="info") html+=renderInfoTab(c);
+  else if(caseTab==="quiz") html+=renderQuizTab(c);
+  else html+=renderSoapTab(c);
+
+  main.innerHTML=html;
+  main.querySelector('[data-back]').onclick=()=>{ libNav="list"; openCaseId=null; render(); };
+  main.querySelector('[data-edit]').onclick=()=>openCaseForm(c);
+  main.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ caseTab=b.dataset.tab; render(); });
+
+  if(caseTab==="quiz") bindQuizTab(c);
+  if(caseTab==="soap") bindSoapTab(c);
+}
+
+function renderInfoTab(c){
+  const p=c.patient||{};
+  return `<div class="patientline">👤 ${esc(p.age||"?")}歲・${esc(p.gender||"")}・${esc(p.occupation||"")}</div>
+    <div class="infobox"><h4>主訴</h4><p>${nl2br(p.chief||"")}</p></div>
+    <div class="infobox"><h4>病史</h4><p>${nl2br(c.history||"")}</p></div>
+    <div class="infobox"><h4>理學檢查／檢查發現</h4><p>${nl2br(c.exam||"")}</p></div>
+    <div class="mini" style="text-align:center;margin-top:6px">讀完情境後，切換到上方「測驗」或「SOAP筆記」開始練習。</div>`;
+}
+
+/* ----- 測驗 ----- */
+function renderQuizTab(c){
+  if(!currentTraineeId){
+    return `<div class="empty"><div class="big">請先設定學員身分</div>點選右上角「切換／新增」建立你的姓名或代號，才能記錄測驗成績。</div>`;
+  }
+  const prev=attempts.find(a=>a.traineeId===currentTraineeId&&a.caseId===c.id&&a.mode==="quiz");
+  const shown = quizShown[c.id] || (prev && !quizAnswers[c.id]);
+  const ans = quizAnswers[c.id] || (prev? Object.fromEntries((prev.answers||[]).map((v,i)=>[i,v])) : {});
+  let html="";
+  if(prev && shown){
+    html+=`<div class="scorebox"><div class="big">${prev.score} / ${prev.total}</div><div class="mini">上次測驗成績（${new Date(prev.completedAt).toLocaleString()}）</div></div>`;
+  }
+  (c.quiz||[]).forEach((q,qi)=>{
+    html+=`<div class="quizq"><div class="qtext">${qi+1}. ${esc(q.q)}</div>`;
+    q.options.forEach((op,oi)=>{
+      const picked = ans[qi]===oi;
+      let cls="opt"+(picked&&!shown?" sel":"");
+      if(shown){
+        if(oi===q.correct) cls="opt right";
+        else if(picked) cls="opt wrong";
+      }
+      html+=`<div class="${cls}" data-pick="${qi}|${oi}">
+        <input type="radio" name="q_${qi}" ${picked?"checked":""} ${shown?"disabled":""}>
+        <span>${esc(op)}</span></div>`;
+    });
+    if(shown) html+=`<div class="explain">💡 ${esc(q.explain||"")}</div>`;
+    html+=`</div>`;
+  });
+  if(!shown){
+    html+=`<button class="chip" id="submitQuiz" style="width:100%;background:var(--main);color:#fff;border-color:var(--main);padding:13px">提交答案</button>`;
+  }else{
+    html+=`<button class="chip" id="retakeQuiz" style="width:100%;padding:13px">🔁 重新作答</button>`;
+  }
+  return html;
+}
+function bindQuizTab(c){
+  const main=document.getElementById("main");
+  const shown = quizShown[c.id] || (attempts.find(a=>a.traineeId===currentTraineeId&&a.caseId===c.id&&a.mode==="quiz") && !quizAnswers[c.id]);
+  if(!shown){
+    main.querySelectorAll('[data-pick]').forEach(el=>el.onclick=()=>{
+      const [qi,oi]=el.dataset.pick.split("|").map(Number);
+      if(!quizAnswers[c.id]) quizAnswers[c.id]={};
+      quizAnswers[c.id][qi]=oi;
+      render();
+    });
+  }
+  const submitBtn=document.getElementById("submitQuiz");
+  if(submitBtn) submitBtn.onclick=()=>{
+    const total=(c.quiz||[]).length;
+    const ans=quizAnswers[c.id]||{};
+    if(Object.keys(ans).length<total){ if(!confirm("還有題目未作答，仍要提交嗎？")) return; }
+    let score=0; const answersArr=[];
+    (c.quiz||[]).forEach((q,qi)=>{ answersArr[qi]=ans[qi]; if(ans[qi]===q.correct) score++; });
+    upsertAttempt({traineeId:currentTraineeId,caseId:c.id,mode:"quiz",score,total,answers:answersArr,completedAt:Date.now()});
+    quizShown[c.id]=true;
+    render();
+  };
+  const retakeBtn=document.getElementById("retakeQuiz");
+  if(retakeBtn) retakeBtn.onclick=()=>{
+    quizAnswers[c.id]={}; quizShown[c.id]=false; render();
+  };
+}
+
+/* ----- SOAP 筆記 ----- */
+function renderSoapTab(c){
+  if(!currentTraineeId){
+    return `<div class="empty"><div class="big">請先設定學員身分</div>點選右上角「切換／新增」建立你的姓名或代號，才能記錄練習結果。</div>`;
+  }
+  const prev=attempts.find(a=>a.traineeId===currentTraineeId&&a.caseId===c.id&&a.mode==="soap");
+  const draft = soapDrafts[c.id] || (prev?{...prev.draft}:{s:"",o:"",a:"",p:""});
+  soapDrafts[c.id]=draft;
+  const refShown = !!soapRefShown[c.id];
+  const rating = draft._rating || (prev?prev.rating:null);
+
+  let html=`<div class="mini" style="margin-bottom:8px">先根據上方情境資訊，自己寫出 S / O / A / P，再對照參考答案自我檢核。</div>
+    <div class="soapgrid">
+      <label>S 主觀資料（病人主訴）</label><textarea id="soap_s">${esc(draft.s||"")}</textarea>
+      <label>O 客觀資料（檢查發現）</label><textarea id="soap_o">${esc(draft.o||"")}</textarea>
+      <label>A 評估（臨床推理／診斷印象）</label><textarea id="soap_a">${esc(draft.a||"")}</textarea>
+      <label>P 治療計畫</label><textarea id="soap_p">${esc(draft.p||"")}</textarea>
+    </div>
+    <button class="chip" id="toggleRef" style="width:100%;margin-top:14px">${refShown?"隱藏參考答案":"👁 對照參考答案"}</button>`;
+  if(refShown){
+    const sp=c.soap||{};
+    html+=`<div class="refbox"><b>S：</b>${nl2br(sp.s||"")}</div>
+      <div class="refbox"><b>O：</b>${nl2br(sp.o||"")}</div>
+      <div class="refbox"><b>A：</b>${nl2br(sp.a||"")}</div>
+      <div class="refbox"><b>P：</b>${nl2br(sp.p||"")}</div>`;
+  }
+  html+=`<div class="mini" style="margin-top:14px">自我評估這次練習：</div>
+    <div class="ratebtns">
+      <button class="good ${rating==='good'?'on':''}" data-rate="good">👍 掌握良好</button>
+      <button class="mid ${rating==='mid'?'on':''}" data-rate="mid">🙂 普通</button>
+      <button class="low ${rating==='low'?'on':''}" data-rate="low">📖 待加強</button>
+    </div>
+    ${prev?`<div class="mini" style="margin-top:8px">上次儲存：${new Date(prev.completedAt).toLocaleString()}</div>`:""}`;
+  return html;
+}
+function bindSoapTab(c){
+  const draft=soapDrafts[c.id];
+  ["s","o","a","p"].forEach(k=>{
+    const el=document.getElementById("soap_"+k);
+    if(el) el.oninput=()=>{ draft[k]=el.value; };
+  });
+  const toggleRef=document.getElementById("toggleRef");
+  if(toggleRef) toggleRef.onclick=()=>{ soapRefShown[c.id]=!soapRefShown[c.id]; render(); };
+  document.querySelectorAll('[data-rate]').forEach(b=>b.onclick=()=>{
+    const rating=b.dataset.rate;
+    draft._rating=rating;
+    upsertAttempt({traineeId:currentTraineeId,caseId:c.id,mode:"soap",rating,
+      draft:{s:draft.s||"",o:draft.o||"",a:draft.a||"",p:draft.p||""},completedAt:Date.now()});
+    render();
+  });
+}
+
+function upsertAttempt(a){
+  attempts=attempts.filter(x=>!(x.traineeId===a.traineeId&&x.caseId===a.caseId&&x.mode===a.mode));
+  a.id=uid();
+  attempts.push(a);
+  saveAttempts();
+}
+
+/* ===== 進度總覽 ===== */
+function renderProgress(){
+  const main=document.getElementById("main");
+  if(!trainees.length){
+    main.innerHTML=`<div class="empty"><div class="big">還沒有任何學員</div>點選右上角「切換／新增」建立第一位受訓學員。</div>`;
+    return;
+  }
+  const totalCases=cases.length;
+  const rows=trainees.map(t=>{
+    const my=attempts.filter(a=>a.traineeId===t.id);
+    const doneCaseIds=new Set(my.map(a=>a.caseId));
+    const quizAtt=my.filter(a=>a.mode==="quiz");
+    const avgPct = quizAtt.length ? Math.round(100*quizAtt.reduce((s,a)=>s+(a.total?a.score/a.total:0),0)/quizAtt.length) : null;
+    const last = my.length ? Math.max(...my.map(a=>a.completedAt)) : null;
+    return {t,completed:doneCaseIds.size,avgPct,last};
+  }).sort((a,b)=>(b.last||0)-(a.last||0));
+
+  let html=`<div class="countLine">共 ${trainees.length} 位學員・題庫 ${totalCases} 個病例</div>`;
+  html+=`<div class="card"><table class="ptable">
+    <tr><th>學員</th><th>完成病例</th><th>測驗平均</th><th>最近活動</th></tr>
+    ${rows.map(r=>`<tr>
+        <td>${esc(r.t.name)}</td>
+        <td>${r.completed} / ${totalCases}
+          <div class="barwrap"><div class="bar" style="width:${totalCases?Math.round(100*r.completed/totalCases):0}%"></div></div>
+        </td>
+        <td>${r.avgPct==null?"—":r.avgPct+"%"}</td>
+        <td>${r.last?new Date(r.last).toLocaleDateString():"—"}</td>
+      </tr>`).join("")}
+  </table></div>`;
+  main.innerHTML=html;
+}
+
+/* ===== 新增／編輯病例 ===== */
+let formState=null;
+function blankQuestion(){ return {q:"",options:["","","",""],correct:0,explain:""}; }
+function openCaseForm(existing){
+  formState = existing ? JSON.parse(JSON.stringify(existing)) : {
+    id:null,title:"",category:CATS[0],difficulty:LEVELS[0],
+    patient:{age:"",gender:"女",occupation:"",chief:""},
+    history:"",exam:"",
+    soap:{s:"",o:"",a:"",p:""},
+    quiz:[blankQuestion()]
+  };
+  document.getElementById("mask").classList.add("on");
+  renderCaseSheet();
+}
+function renderCaseSheet(){
+  const f=formState;
+  const sheet=document.getElementById("sheet");
+  sheet.classList.add("on");
+  let html=`<h3>${f.id?"編輯病例":"新增病例"}</h3>
+    <label>病例標題</label><input id="f_title" value="${esc(f.title)}" placeholder="例如：五十肩、術後膝關節復健…">
+    <label>類別</label><div class="seg">${CATS.map(c=>`<button data-catf="${esc(c)}" class="${f.category===c?'on':''}">${esc(c)}</button>`).join("")}</div>
+    <label>難度</label><div class="seg">${LEVELS.map(l=>`<button data-lvlf="${esc(l)}" class="${f.difficulty===l?'on':''}">${esc(l)}</button>`).join("")}</div>
+
+    <h4>病患基本資料</h4>
+    <label>年齡</label><input id="f_age" value="${esc(f.patient.age)}">
+    <label>性別</label><div class="seg">
+      <button data-genf="女" class="${f.patient.gender==='女'?'on':''}">女</button>
+      <button data-genf="男" class="${f.patient.gender==='男'?'on':''}">男</button>
+    </div>
+    <label>職業</label><input id="f_occ" value="${esc(f.patient.occupation)}">
+    <label>主訴</label><textarea id="f_chief">${esc(f.patient.chief)}</textarea>
+
+    <h4>病史</h4><textarea id="f_history">${esc(f.history)}</textarea>
+    <h4>理學檢查／檢查發現</h4><textarea id="f_exam">${esc(f.exam)}</textarea>
+
+    <h4>SOAP 參考答案</h4>
+    <label>S 主觀</label><textarea id="f_s">${esc(f.soap.s)}</textarea>
+    <label>O 客觀</label><textarea id="f_o">${esc(f.soap.o)}</textarea>
+    <label>A 評估</label><textarea id="f_a">${esc(f.soap.a)}</textarea>
+    <label>P 計畫</label><textarea id="f_p">${esc(f.soap.p)}</textarea>
+
+    <h4>測驗題目</h4>`;
+  f.quiz.forEach((q,qi)=>{
+    html+=`<div class="qblock">
+      <div class="qhead"><span>第 ${qi+1} 題</span>${f.quiz.length>1?`<button class="qdel" data-delq="${qi}">刪除此題</button>`:""}</div>
+      <input data-qtext="${qi}" value="${esc(q.q)}" placeholder="題目內容" style="margin-top:8px">
+      ${q.options.map((op,oi)=>`
+        <div class="optrow">
+          <input type="radio" name="correct_${qi}" data-correct="${qi}|${oi}" ${q.correct===oi?"checked":""}>
+          <input type="text" data-opt="${qi}|${oi}" value="${esc(op)}" placeholder="選項 ${oi+1}（勾選左方單選鈕為正解）">
+        </div>`).join("")}
+      <textarea data-explain="${qi}" placeholder="解說（為什麼這個答案正確）" style="margin-top:6px">${esc(q.explain)}</textarea>
+    </div>`;
+  });
+  html+=`<button class="addq" id="addQ">＋ 新增題目</button>`;
+  html+=`<div class="btns"><button class="cancel" id="caseCancel">取消</button><button class="save" id="caseSave">儲存病例</button></div>`;
+  if(f.id) html+=`<button class="del" id="caseDel">🗑 刪除此病例</button>`;
+  sheet.innerHTML=html;
+
+  sheet.querySelectorAll('[data-catf]').forEach(b=>b.onclick=()=>{ f.category=b.dataset.catf; renderCaseSheet(); });
+  sheet.querySelectorAll('[data-lvlf]').forEach(b=>b.onclick=()=>{ f.difficulty=b.dataset.lvlf; renderCaseSheet(); });
+  sheet.querySelectorAll('[data-genf]').forEach(b=>b.onclick=()=>{ f.patient.gender=b.dataset.genf; renderCaseSheet(); });
+
+  document.getElementById("f_title").oninput=e=>f.title=e.target.value;
+  document.getElementById("f_age").oninput=e=>f.patient.age=e.target.value;
+  document.getElementById("f_occ").oninput=e=>f.patient.occupation=e.target.value;
+  document.getElementById("f_chief").oninput=e=>f.patient.chief=e.target.value;
+  document.getElementById("f_history").oninput=e=>f.history=e.target.value;
+  document.getElementById("f_exam").oninput=e=>f.exam=e.target.value;
+  document.getElementById("f_s").oninput=e=>f.soap.s=e.target.value;
+  document.getElementById("f_o").oninput=e=>f.soap.o=e.target.value;
+  document.getElementById("f_a").oninput=e=>f.soap.a=e.target.value;
+  document.getElementById("f_p").oninput=e=>f.soap.p=e.target.value;
+
+  sheet.querySelectorAll('[data-qtext]').forEach(el=>el.oninput=()=>{ f.quiz[+el.dataset.qtext].q=el.value; });
+  sheet.querySelectorAll('[data-opt]').forEach(el=>el.oninput=()=>{
+    const [qi,oi]=el.dataset.opt.split("|").map(Number); f.quiz[qi].options[oi]=el.value;
+  });
+  sheet.querySelectorAll('[data-correct]').forEach(el=>el.onchange=()=>{
+    const [qi,oi]=el.dataset.correct.split("|").map(Number); f.quiz[qi].correct=oi;
+  });
+  sheet.querySelectorAll('[data-explain]').forEach(el=>el.oninput=()=>{ f.quiz[+el.dataset.explain].explain=el.value; });
+  sheet.querySelectorAll('[data-delq]').forEach(el=>el.onclick=()=>{
+    f.quiz.splice(+el.dataset.delq,1); renderCaseSheet();
+  });
+  document.getElementById("addQ").onclick=()=>{ f.quiz.push(blankQuestion()); renderCaseSheet(); };
+  document.getElementById("caseCancel").onclick=()=>{ formState=null; closeSheet(); };
+  document.getElementById("caseSave").onclick=()=>{
+    if(!f.title.trim()){ alert("請輸入病例標題"); return; }
+    if(f.id){
+      const idx=cases.findIndex(c=>c.id===f.id);
+      if(idx>-1) cases[idx]=f;
+    }else{
+      f.id=uid(); cases.push(f);
+    }
+    saveCases(); formState=null; closeSheet();
+    libNav="detail"; openCaseId=f.id; caseTab="info"; render();
+  };
+  const delBtn=document.getElementById("caseDel");
+  if(delBtn) delBtn.onclick=()=>{
+    if(!confirm("確定刪除這個病例？相關的練習紀錄也會一併移除。")) return;
+    cases=cases.filter(c=>c.id!==f.id);
+    attempts=attempts.filter(a=>a.caseId!==f.id);
+    saveCases(); saveAttempts(); formState=null; closeSheet();
+    libNav="list"; openCaseId=null; render();
+  };
+}
+
+/* ===== 事件綁定 ===== */
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{ view=t.dataset.view; libNav="list"; render(); });
+document.getElementById("fab").onclick=()=>openCaseForm(null);
+document.getElementById("whoSwitch").onclick=openWhoSheet;
+document.getElementById("mask").onclick=()=>{ formState=null; closeSheet(); };
+
+/* ===== 啟動 ===== */
+if(!Array.isArray(cases) || !cases.length) cases=seedCases();
+saveCasesInitial();
+function saveCasesInitial(){ localStorage.setItem(C_KEY,JSON.stringify(cases)); }
+if(!currentTraineeId && trainees.length) setCurrent(trainees[0].id);
+cloudInit();
+render();
+if(!trainees.length) openWhoSheet();
+</script>
+</body>
+</html>
