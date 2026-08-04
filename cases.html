@@ -827,8 +827,11 @@ function renderAdmin(){
 
 /* ----- 病例編輯表單（學員新增／編輯自己的病例，或管理者編輯任何病例） ----- */
 let editCase=null;
+let quickVisitMode=false;   // true = 只顯示「新增回診紀錄」的精簡表單（不重複顯示病例標題/基本資料/舊輪次）
+let quickVisitStartIndex=0; // 這次快速新增，是從第幾輪開始算新內容
 function openCaseEditor(caseId, opts){
   opts = opts || {};
+  quickVisitMode = !!opts.addRound;
   if(caseId){
     const src=cases.find(c=>c.id===caseId);
     if(!canEdit(src)){ alert("這不是你建立的病例，且管理後台尚未解鎖，無法編輯。"); return; }
@@ -838,72 +841,46 @@ function openCaseEditor(caseId, opts){
   }
   if(!editCase.demographics) editCase.demographics=blankDemo();
   if(!Array.isArray(editCase.complaints)) editCase.complaints=[];
+  quickVisitStartIndex = editCase.soapRounds.length;
   if(opts.addRound) editCase.soapRounds.push(blankRound("","",true));
   openSheet(caseEditorHTML(!!caseId));
   bindCaseEditor(!!caseId);
   if(opts.addRound){
-    // 直接新增一輪：把表單捲到新加的那一輪，讓使用者不用滑過前面所有紀錄
-    const blocks=document.querySelectorAll("#sheet .soapedit");
-    const last=blocks[blocks.length-1];
-    if(last){
-      last.scrollIntoView({behavior:"smooth", block:"start"});
-      const dateInput=last.querySelector('input[type="date"]');
-      if(dateInput) setTimeout(()=>dateInput.focus(),300);
-    }
+    const dateInput=document.querySelector(`[data-rdate="${quickVisitStartIndex}"]`);
+    if(dateInput) setTimeout(()=>dateInput.focus(),200);
   }
 }
-function caseEditorHTML(isEdit){
-  let h=`<h3>${isEdit?"編輯病例":"新增病例"}</h3>
-    <div class="mini" style="margin-bottom:6px">用 SOAP（主觀 S／客觀 O／評估 A／處置 P）記錄病例，一輪代表一次評估或介入循環，可以無限新增輪次，每格都是自由文字，想怎麼寫都可以。</div>
-    <label>病例標題</label>
-    <input id="ceTitle" value="${esc(editCase.title)}" placeholder="例如：2026/08/04 明德 右側肩膀">
-    <div class="soapedit" style="margin-top:14px">
-      <label style="margin-top:0">基本資料（選填）</label>
-      <label style="margin:10px 0 3px">姓氏</label>
-      <input id="ceSurname" value="${esc(editCase.demographics.surname)}" placeholder="例如：李（會自動顯示成「李先生／李小姐」）">
-      <label style="margin:10px 0 3px">性別</label>
-      <div class="seg" id="ceGender">${["男","女","其他"].map(g=>`<button type="button" data-v="${g}" class="${editCase.demographics.gender===g?'on':''}">${g}</button>`).join("")}</div>
-      <label>年齡</label>
-      <input id="ceAge" value="${esc(editCase.demographics.age)}" placeholder="例如：35" inputmode="numeric">
-      <label>職業</label>
-      <input id="ceOcc" value="${esc(editCase.demographics.occupation)}" placeholder="例如：工程師">
-      <label>慢性病</label>
-      <div class="seg" id="ceChronic">
-        <button type="button" data-v="0" class="${editCase.demographics.chronicHas?'':'on'}">無</button>
-        <button type="button" data-v="1" class="${editCase.demographics.chronicHas?'on':''}">有</button>
-      </div>
-      ${editCase.demographics.chronicHas?`<input id="ceChronicDetail" value="${esc(editCase.demographics.chronicDetail)}" placeholder="例如：高血壓、糖尿病" style="margin-top:8px">`:""}
-      <label>運動項目</label>
-      <input id="ceSport" value="${esc(editCase.demographics.sport)}" placeholder="例如：路跑、重量訓練、羽球">
-      <label>運動頻率</label>
-      <input id="ceFreq" value="${esc(editCase.demographics.exerciseFreq)}" placeholder="例如：每週3次，每次1小時">
-    </div>
-    <label>主訴項目（病人的主要問題，每一輪 SOAP 可以勾選要處理哪幾項；治療後有新變化，可在下方每一輪的勾選區「新增追蹤項目」）</label>`;
-  {
-    const labels=complaintLabels(editCase.complaints);
-    orderedComplaintIndices(editCase.complaints).forEach(gi=>{
-      const c=editCase.complaints[gi];
-      const isSub=c.parent!=null;
-      h+=`<div class="complaint-row" style="${isSub?'margin-left:24px':''}">
-          <span class="numbadge" style="${isSub?'background:var(--amber)':''}">${labels[gi]}</span>
-          <input data-citem="${gi}" value="${esc(c.text)}" placeholder="例如：舉手前側肩膀痛">
-          <button class="iconbtn del" data-cdel="${gi}">✕</button>
-        </div>`;
-    });
-  }
+/* 主訴項目清單（病例層級，各輪共用），新增病例／快速新增回診都會用到 */
+function complaintsListHTML(){
+  let h="";
+  const labels=complaintLabels(editCase.complaints);
+  orderedComplaintIndices(editCase.complaints).forEach(gi=>{
+    const c=editCase.complaints[gi];
+    const isSub=c.parent!=null;
+    h+=`<div class="complaint-row" style="${isSub?'margin-left:24px':''}">
+        <span class="numbadge" style="${isSub?'background:var(--amber)':''}">${labels[gi]}</span>
+        <input data-citem="${gi}" value="${esc(c.text)}" placeholder="例如：舉手前側肩膀痛">
+        <button class="iconbtn del" data-cdel="${gi}">✕</button>
+      </div>`;
+  });
   h+=`<button class="chip" id="cAdd" style="margin-bottom:14px">＋ 新增主訴項目</button>`;
-  h+=`<label>SOAP 輪次</label>`;
+  return h;
+}
+/* SOAP 輪次區塊，fromIndex 讓「快速新增回診」只顯示新加的那幾輪，不必看到舊輪次 */
+function roundsSectionHTML(fromIndex){
+  let h="";
   const editVisits=groupVisits(editCase.soapRounds);
+  const labels=complaintLabels(editCase.complaints);
   (editCase.soapRounds||[]).forEach((r,ri)=>{
+    if(ri<fromIndex) return;
     const showDateInput = ri===0 || !!r.newVisit;
     const effDate = (editVisits.find(v=>v.rounds.includes(r))||{}).date || "";
-    const labels=complaintLabels(editCase.complaints);
     h+=`<div class="soapedit">
         <div class="soapedit-h">
-          ${ri===0
+          ${showDateInput
             ? `<input data-rlabel="${ri}" value="${esc(r.label)}" placeholder="標題（選填，例如：初次評估）">`
             : `<div class="mini" style="flex:1">第 ${ri+1} 輪${r.label?`：${esc(r.label)}`:""}</div>`}
-          <button class="iconbtn del" data-rdel="${ri}">🗑</button>
+          ${(editCase.soapRounds.length>1)?`<button class="iconbtn del" data-rdel="${ri}">🗑</button>`:""}
         </div>`;
     if(showDateInput){
       h+=`<label style="margin:8px 0 3px">看診日期（選填；只有這裡要填，後面接著新增的輪次都自動算同一次回診）</label>
@@ -958,6 +935,49 @@ function caseEditorHTML(isEdit){
     h+=`</div>`;
   });
   h+=`<button class="chip wide" id="addRound" style="margin-bottom:14px">＋ 新增下一輪 SOAP</button>`;
+  return h;
+}
+function caseEditorHTML(isEdit){
+  if(quickVisitMode){
+    // 快速新增回診：不重複顯示病例標題／基本資料／舊的回診內容，只填這次回診的日期跟 SOAP
+    let h=`<h3>新增回診紀錄</h3>
+      <div class="mini" style="margin-bottom:10px">📋 ${esc(editCase.title||"（未命名病例）")}</div>
+      <div class="mini" style="margin-bottom:14px">不用重填姓名、基本資料，只要填這次回診的日期跟 SOAP 內容就好。</div>
+      <label>主訴項目（可勾選之前用過的，或直接新增）</label>`;
+    h+=complaintsListHTML();
+    h+=roundsSectionHTML(quickVisitStartIndex);
+    h+=`<div class="btns"><button class="cancel" id="ceCancel">取消</button><button class="save" id="ceSave">儲存</button></div>`;
+    return h;
+  }
+  let h=`<h3>${isEdit?"編輯病例":"新增病例"}</h3>
+    <div class="mini" style="margin-bottom:6px">用 SOAP（主觀 S／客觀 O／評估 A／處置 P）記錄病例，一輪代表一次評估或介入循環，可以無限新增輪次，每格都是自由文字，想怎麼寫都可以。</div>
+    <label>病例標題</label>
+    <input id="ceTitle" value="${esc(editCase.title)}" placeholder="例如：2026/08/04 明德 右側肩膀">
+    <div class="soapedit" style="margin-top:14px">
+      <label style="margin-top:0">基本資料（選填）</label>
+      <label style="margin:10px 0 3px">姓氏</label>
+      <input id="ceSurname" value="${esc(editCase.demographics.surname)}" placeholder="例如：李（會自動顯示成「李先生／李小姐」）">
+      <label style="margin:10px 0 3px">性別</label>
+      <div class="seg" id="ceGender">${["男","女","其他"].map(g=>`<button type="button" data-v="${g}" class="${editCase.demographics.gender===g?'on':''}">${g}</button>`).join("")}</div>
+      <label>年齡</label>
+      <input id="ceAge" value="${esc(editCase.demographics.age)}" placeholder="例如：35" inputmode="numeric">
+      <label>職業</label>
+      <input id="ceOcc" value="${esc(editCase.demographics.occupation)}" placeholder="例如：工程師">
+      <label>慢性病</label>
+      <div class="seg" id="ceChronic">
+        <button type="button" data-v="0" class="${editCase.demographics.chronicHas?'':'on'}">無</button>
+        <button type="button" data-v="1" class="${editCase.demographics.chronicHas?'on':''}">有</button>
+      </div>
+      ${editCase.demographics.chronicHas?`<input id="ceChronicDetail" value="${esc(editCase.demographics.chronicDetail)}" placeholder="例如：高血壓、糖尿病" style="margin-top:8px">`:""}
+      <label>運動項目</label>
+      <input id="ceSport" value="${esc(editCase.demographics.sport)}" placeholder="例如：路跑、重量訓練、羽球">
+      <label>運動頻率</label>
+      <input id="ceFreq" value="${esc(editCase.demographics.exerciseFreq)}" placeholder="例如：每週3次，每次1小時">
+    </div>
+    <label>主訴項目（病人的主要問題，每一輪 SOAP 可以勾選要處理哪幾項；治療後有新變化，可在下方每一輪的勾選區「新增追蹤項目」）</label>`;
+  h+=complaintsListHTML();
+  h+=`<label>SOAP 輪次</label>`;
+  h+=roundsSectionHTML(0);
   h+=`<label>討論／反思（選填）</label>
     <textarea id="ceDiscuss" placeholder="例如：如果這個假設不成立，還有哪些可能？">${esc(editCase.discussion||"")}</textarea>`;
   h+=`<div class="btns"><button class="cancel" id="ceCancel">取消</button><button class="save" id="ceSave">儲存</button></div>`;
@@ -969,24 +989,26 @@ function refreshEditorSheet(isEdit){
   bindCaseEditor(isEdit);
 }
 function bindCaseEditor(isEdit){
-  document.getElementById("ceTitle").oninput=e=>editCase.title=e.target.value;
-  document.getElementById("ceDiscuss").oninput=e=>editCase.discussion=e.target.value;
+  if(!quickVisitMode){
+    document.getElementById("ceTitle").oninput=e=>editCase.title=e.target.value;
+    document.getElementById("ceDiscuss").oninput=e=>editCase.discussion=e.target.value;
 
-  document.getElementById("ceSurname").oninput=e=>editCase.demographics.surname=e.target.value;
-  document.querySelectorAll("#ceGender button").forEach(b=>b.onclick=()=>{
-    editCase.demographics.gender = editCase.demographics.gender===b.dataset.v ? "" : b.dataset.v;
-    refreshEditorSheet(isEdit);
-  });
-  document.getElementById("ceAge").oninput=e=>editCase.demographics.age=e.target.value;
-  document.getElementById("ceOcc").oninput=e=>editCase.demographics.occupation=e.target.value;
-  document.querySelectorAll("#ceChronic button").forEach(b=>b.onclick=()=>{
-    editCase.demographics.chronicHas = b.dataset.v==="1";
-    refreshEditorSheet(isEdit);
-  });
-  const chronicDetailEl=document.getElementById("ceChronicDetail");
-  if(chronicDetailEl) chronicDetailEl.oninput=e=>editCase.demographics.chronicDetail=e.target.value;
-  document.getElementById("ceSport").oninput=e=>editCase.demographics.sport=e.target.value;
-  document.getElementById("ceFreq").oninput=e=>editCase.demographics.exerciseFreq=e.target.value;
+    document.getElementById("ceSurname").oninput=e=>editCase.demographics.surname=e.target.value;
+    document.querySelectorAll("#ceGender button").forEach(b=>b.onclick=()=>{
+      editCase.demographics.gender = editCase.demographics.gender===b.dataset.v ? "" : b.dataset.v;
+      refreshEditorSheet(isEdit);
+    });
+    document.getElementById("ceAge").oninput=e=>editCase.demographics.age=e.target.value;
+    document.getElementById("ceOcc").oninput=e=>editCase.demographics.occupation=e.target.value;
+    document.querySelectorAll("#ceChronic button").forEach(b=>b.onclick=()=>{
+      editCase.demographics.chronicHas = b.dataset.v==="1";
+      refreshEditorSheet(isEdit);
+    });
+    const chronicDetailEl=document.getElementById("ceChronicDetail");
+    if(chronicDetailEl) chronicDetailEl.oninput=e=>editCase.demographics.chronicDetail=e.target.value;
+    document.getElementById("ceSport").oninput=e=>editCase.demographics.sport=e.target.value;
+    document.getElementById("ceFreq").oninput=e=>editCase.demographics.exerciseFreq=e.target.value;
+  }
 
   function autoGrow(el){ el.style.height="auto"; el.style.height=(el.scrollHeight+2)+"px"; }
   document.querySelectorAll("[data-rlabel]").forEach(inp=>inp.oninput=e=>{ editCase.soapRounds[+inp.dataset.rlabel].label=e.target.value; });
