@@ -230,7 +230,7 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
 function esc(s){return String(s??"").replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));}
 function clone(o){ return JSON.parse(JSON.stringify(o)); }
 function fmtDate(ts){ if(!ts) return ""; const d=new Date(ts); return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; }
-function blankRound(label, date){ return {id:uid(), label:label||"", date:date||"", complaintIdx:[], items:{}, general:{o:"",a:"",p:""}}; }
+function blankRound(label, date, newVisit){ return {id:uid(), label:label||"", date:date||"", newVisit:!!newVisit, complaintIdx:[], items:{}, general:{o:"",a:"",p:""}}; }
 function blankDemo(){ return {surname:"", gender:"", age:"", occupation:"", chronicHas:false, chronicDetail:"", sport:"", exerciseFreq:""}; }
 /* 姓氏＋性別 → 稱謂，例如「李先生」「李小姐」；沒填姓氏就退回單純性別 */
 function honorific(d){
@@ -289,8 +289,14 @@ function normalizeCase(c){
   c.complaints = c.complaints.map(item=>
     typeof item==="string" ? {text:item, parent:null} : {text:item.text||"", parent: item.parent==null?null:item.parent}
   );
-  (c.soapRounds||[]).forEach(r=>{
+  (c.soapRounds||[]).forEach((r,i)=>{
     if(typeof r.date!=="string") r.date="";
+    if(typeof r.newVisit!=="boolean"){
+      // 舊資料沒有 newVisit 標記：用「日期跟上一輪不同」推斷是否為新回診的第一輪
+      const prevDate = i>0 ? (c.soapRounds[i-1].date||"") : null;
+      r.newVisit = i===0 || (r.date||"")!==prevDate;
+    }
+    if(!r.newVisit) r.date="";
     if(!r.general) r.general={o:"",a:"",p:""};
     if(!Array.isArray(r.complaintIdx)){
       let oldS=r.s;
@@ -333,7 +339,7 @@ function seedCases(){
       ],
       soapRounds:[
         {
-          id:uid(), label:"初次評估與快速治療測試", date:"2026-07-20",
+          id:uid(), label:"初次評估與快速治療測試", date:"2026-07-20", newVisit:true,
           complaintIdx:[0,1],
           items:{
             0:{
@@ -350,7 +356,7 @@ function seedCases(){
           general:{o:"",a:"",p:""}
         },
         {
-          id:uid(), label:"衛教與居家建議", date:"2026-07-20",
+          id:uid(), label:"衛教與居家建議", date:"", newVisit:false,
           complaintIdx:[], items:{},
           general:{
             o:"", a:"",
@@ -358,7 +364,7 @@ function seedCases(){
           }
         },
         {
-          id:uid(), label:"運動評估與介入", date:"2026-07-27",
+          id:uid(), label:"運動評估與介入", date:"2026-07-27", newVisit:true,
           complaintIdx:[], items:{},
           general:{
             o:"（承上一輪問診：訓練習慣背多於胸，可能與代償型態有關）\n皮拉提斯動作評估：\n・伏地挺身：出現肩胛骨翼狀突出（scapula winging）\n・仰臥側滾至左側：動作品質差（抬腳跟時無法控制速度）",
@@ -367,7 +373,7 @@ function seedCases(){
           }
         },
         {
-          id:uid(), label:"介入後複測", date:"2026-08-03",
+          id:uid(), label:"介入後複測", date:"2026-08-03", newVisit:true,
           complaintIdx:[2,1],
           items:{
             2:{o:"雙側軀幹側屈時，右下背已無夾擠/怪異感；軀幹旋轉AROM進步。", a:"追蹤新增的久坐不適，較不像肌肉緊繃，考慮姿勢性因素。", p:"衛教久坐每30-40分鐘起身活動。"},
@@ -385,7 +391,7 @@ function seedCases(){
       complaints:[{text:"肩關節鏡下夾擠症清創術後第4週，主訴上舉過頭時前側肩膀疼痛（VAS 4/10）。", parent:null}],
       soapRounds:[
         {
-          id:uid(), label:"初次評估", date:"2026-07-15",
+          id:uid(), label:"初次評估", date:"2026-07-15", newVisit:true,
           complaintIdx:[0],
           items:{0:{
             o:"肩關節AROM前屈120°（健側170°），疼痛弧約在80-120°之間；MMT棘上肌4-/5、三角肌4/5；肩胛骨動作型態呈現上斜方肌代償上提。",
@@ -413,15 +419,17 @@ let libNav = "list";        // list | detail
 let openCaseId = null;
 let openVisitKey = null;    // 選中的回診日期分組（case 內有多次回診時才用得到）
 
-/* 把病例的 SOAP 輪次依「看診日期」分組成一次次回診紀錄；沒填日期的輪次歸在同一組 */
+/* 把病例的 SOAP 輪次分組成一次次回診紀錄。每一輪不用各自填日期——只有「開啟新回診」
+   的那一輪（第一輪、或標記 newVisit 的輪次）才帶日期，後面接續的輪次自動算同一次回診，
+   不看它們自己的 date 欄位（避免因為填寫順序造成日期對不起來）。 */
 function groupVisits(rounds){
-  const map=new Map();
-  (rounds||[]).forEach(r=>{
-    const key=r.date||"__nodate__";
-    if(!map.has(key)) map.set(key,{key, date:r.date||"", rounds:[]});
-    map.get(key).rounds.push(r);
+  const groups=[];
+  (rounds||[]).forEach((r,i)=>{
+    if(i===0 || r.newVisit || !groups.length){
+      groups.push({key:r.id, date:r.date||"", rounds:[]});
+    }
+    groups[groups.length-1].rounds.push(r);
   });
-  const groups=Array.from(map.values());
   groups.sort((a,b)=>{
     if(!a.date && !b.date) return 0;
     if(!a.date) return 1;
@@ -826,11 +834,11 @@ function openCaseEditor(caseId, opts){
     if(!canEdit(src)){ alert("這不是你建立的病例，且管理後台尚未解鎖，無法編輯。"); return; }
     editCase = clone(src);
   }else{
-    editCase = {id:uid(), title:"", createdBy:{id:myId,name:myName}, createdAt:Date.now(), demographics:blankDemo(), complaints:[], soapRounds:[blankRound("初次評估")], discussion:""};
+    editCase = {id:uid(), title:"", createdBy:{id:myId,name:myName}, createdAt:Date.now(), demographics:blankDemo(), complaints:[], soapRounds:[blankRound("初次評估","",true)], discussion:""};
   }
   if(!editCase.demographics) editCase.demographics=blankDemo();
   if(!Array.isArray(editCase.complaints)) editCase.complaints=[];
-  if(opts.addRound) editCase.soapRounds.push(blankRound(""));
+  if(opts.addRound) editCase.soapRounds.push(blankRound("","",true));
   openSheet(caseEditorHTML(!!caseId));
   bindCaseEditor(!!caseId);
   if(opts.addRound){
@@ -885,9 +893,10 @@ function caseEditorHTML(isEdit){
   }
   h+=`<button class="chip" id="cAdd" style="margin-bottom:14px">＋ 新增主訴項目</button>`;
   h+=`<label>SOAP 輪次</label>`;
+  const editVisits=groupVisits(editCase.soapRounds);
   (editCase.soapRounds||[]).forEach((r,ri)=>{
-    const prevDate = ri>0 ? (editCase.soapRounds[ri-1].date||"") : null;
-    const showDateInput = ri===0 || (r.date||"")!==prevDate;
+    const showDateInput = ri===0 || !!r.newVisit;
+    const effDate = (editVisits.find(v=>v.rounds.includes(r))||{}).date || "";
     const labels=complaintLabels(editCase.complaints);
     h+=`<div class="soapedit">
         <div class="soapedit-h">
@@ -897,10 +906,10 @@ function caseEditorHTML(isEdit){
           <button class="iconbtn del" data-rdel="${ri}">🗑</button>
         </div>`;
     if(showDateInput){
-      h+=`<label style="margin:8px 0 3px">看診日期（選填；同一天的多輪 SOAP 會自動沿用同一個日期）</label>
+      h+=`<label style="margin:8px 0 3px">看診日期（選填；只有這裡要填，後面接著新增的輪次都自動算同一次回診）</label>
         <input type="date" data-rdate="${ri}" value="${esc(r.date||"")}" style="max-width:220px">`;
-    }else if(r.date){
-      h+=`<div class="mini" style="margin:4px 0 8px">📅 沿用 ${esc(r.date)}</div>`;
+    }else{
+      h+=`<div class="mini" data-datehint="${ri}" style="margin:4px 0 8px">📅 沿用本次回診日期${effDate?`（${esc(effDate)}）`:"（尚未填寫）"}</div>`;
     }
     h+=`<label style="margin:8px 0 3px">這一輪要處理哪些主訴？（可複選，勾選後下面會出現對應的 O/A/P；若沒有合適的項目，先到上方「主訴項目」新增）</label>`;
     if((editCase.complaints||[]).length){
@@ -927,7 +936,9 @@ function caseEditorHTML(isEdit){
         const it=(r.items||{})[gi]||{o:"",a:"",p:""};
         h+=`<div class="complaintgroup">
             <div class="complaintgroup-h" data-grouplabel="${gi}"><span class="numbadge">${labels[gi]}</span><span>${esc(c.text)||"（尚未填寫主訴文字）"}</span></div>
-            <label style="margin:0 0 3px">O 客觀檢查</label>
+            <label style="margin:0 0 3px">S 主觀描述</label>
+            <textarea data-cs="${gi}" placeholder="病人這次怎麼說？（跟上方主訴項目共用同一段文字）">${esc(c.text)}</textarea>
+            <label style="margin:8px 0 3px">O 客觀檢查</label>
             <textarea class="big" data-io="${ri}|${gi}" placeholder="站姿觀察…&#10;動作測試…&#10;觸診…">${esc(it.o)}</textarea>
             <label style="margin:8px 0 3px">A 評估／假設</label>
             <textarea class="big" data-ia="${ri}|${gi}" placeholder="臨床推理、懷疑的問題點…">${esc(it.a)}</textarea>
@@ -979,15 +990,23 @@ function bindCaseEditor(isEdit){
 
   function autoGrow(el){ el.style.height="auto"; el.style.height=(el.scrollHeight+2)+"px"; }
   document.querySelectorAll("[data-rlabel]").forEach(inp=>inp.oninput=e=>{ editCase.soapRounds[+inp.dataset.rlabel].label=e.target.value; });
-  document.querySelectorAll("[data-rdate]").forEach(inp=>inp.oninput=e=>{ editCase.soapRounds[+inp.dataset.rdate].date=e.target.value; });
+  document.querySelectorAll("[data-rdate]").forEach(inp=>inp.oninput=e=>{
+    editCase.soapRounds[+inp.dataset.rdate].date=e.target.value;
+    const visits=groupVisits(editCase.soapRounds);
+    editCase.soapRounds.forEach((r,i)=>{
+      const hint=document.querySelector(`[data-datehint="${i}"]`);
+      if(!hint) return;
+      const v=visits.find(v=>v.rounds.includes(r));
+      const d=v?v.date:"";
+      hint.textContent = "📅 沿用本次回診日期"+(d?`（${d}）`:"（尚未填寫）");
+    });
+  });
   document.querySelectorAll("[data-rdel]").forEach(b=>b.onclick=()=>{
     if(editCase.soapRounds.length<=1){ alert("至少要保留一輪 SOAP"); return; }
     editCase.soapRounds.splice(+b.dataset.rdel,1); refreshEditorSheet(isEdit);
   });
   document.getElementById("addRound").onclick=()=>{
-    const rounds=editCase.soapRounds;
-    const lastDate = rounds.length ? rounds[rounds.length-1].date : "";
-    rounds.push(blankRound("", lastDate));
+    editCase.soapRounds.push(blankRound("", "", false));
     refreshEditorSheet(isEdit);
   };
 
@@ -1001,12 +1020,18 @@ function bindCaseEditor(isEdit){
   document.querySelectorAll("[data-gp]").forEach(t=>{ autoGrow(t); t.oninput=e=>{ editCase.soapRounds[+t.dataset.gp].general.p=e.target.value; autoGrow(t); }; });
 
   // 主訴項目（病例層級，各輪共用；可有子項目記錄治療後的追蹤變化）
-  document.querySelectorAll("[data-citem]").forEach(inp=>inp.oninput=e=>{
-    const gi=+inp.dataset.citem; editCase.complaints[gi].text=e.target.value;
+  // 同一個主訴的文字可能同時出現在上方主訴清單、以及每一輪各自的 S 欄位（可能不只一處），
+  // 三處都指向同一份資料，任何一處改了都要同步更新其他地方的顯示。
+  function syncComplaintText(gi,value){
+    editCase.complaints[gi].text=value;
+    document.querySelectorAll(`[data-citem="${gi}"]`).forEach(el=>{ if(el.value!==value) el.value=value; });
+    document.querySelectorAll(`[data-cs="${gi}"]`).forEach(el=>{ if(el.value!==value) el.value=value; });
     document.querySelectorAll(`[data-grouplabel="${gi}"] span:last-child`).forEach(el=>{
-      el.textContent = e.target.value || "（尚未填寫主訴文字）";
+      el.textContent = value || "（尚未填寫主訴文字）";
     });
-  });
+  }
+  document.querySelectorAll("[data-citem]").forEach(inp=>inp.oninput=e=>syncComplaintText(+inp.dataset.citem, e.target.value));
+  document.querySelectorAll("[data-cs]").forEach(ta=>ta.oninput=e=>syncComplaintText(+ta.dataset.cs, e.target.value));
   document.querySelectorAll("[data-cdel]").forEach(b=>b.onclick=()=>{
     const gi=+b.dataset.cdel;
     const children=editCase.complaints.map((c,i)=>c.parent===gi?i:-1).filter(i=>i>=0);
