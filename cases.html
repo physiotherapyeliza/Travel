@@ -648,8 +648,8 @@ function renderCaseDetail(){
       ${demoText?`<div class="demoline"><span class="lbl">👤 </span>${esc(demoText)}</div>`:""}
     </div>`;
 
-  if(visits.length>1 && openVisitKey==null){
-    // 多次回診：先顯示回診日期清單
+  if(openVisitKey==null){
+    // 病例總覽：一律以回診日期分卡片呈現（這個人幾月幾號來過幾次），不直接顯示 SOAP 內容
     let html=`<div style="display:flex;gap:8px;margin-bottom:10px">
         <button class="chip" id="backLib">‹ 返回病例庫</button>
         ${canEdit(c)?`<button class="chip" id="editThis">✎ 編輯</button>`:""}
@@ -657,15 +657,17 @@ function renderCaseDetail(){
     html+=headerCard;
     if(canEdit(c)) html+=`<button class="chip primary wide" id="addVisit" style="margin-bottom:12px;padding:12px">＋ 新增回診紀錄（新日期）</button>`;
     html+=`<div class="countLine">共 ${visits.length} 次回診紀錄，點選查看當次 SOAP</div>`;
-    html+=visits.map(v=>`<div class="card" data-visit="${esc(v.key)}" style="cursor:pointer">
-        <div class="row">
-          <div style="flex:1">
-            <div class="title">📅 ${esc(v.date||"未填日期")}</div>
-            <div class="meta">共 ${v.rounds.length} 輪 SOAP</div>
+    html+= visits.length
+      ? visits.map(v=>`<div class="card" data-visit="${esc(v.key)}" style="cursor:pointer">
+          <div class="row">
+            <div style="flex:1">
+              <div class="title">📅 ${esc(v.date||"未填日期")}</div>
+              <div class="meta">共 ${v.rounds.length} 輪 SOAP</div>
+            </div>
+            <div class="mini" style="align-self:center">›</div>
           </div>
-          <div class="mini" style="align-self:center">›</div>
-        </div>
-      </div>`).join("");
+        </div>`).join("")
+      : `<div class="empty"><div class="big">還沒有任何回診紀錄</div>按上方按鈕新增第一次回診吧。</div>`;
     if(c.discussion && c.discussion.trim()){
       html+=`<div class="discussbox"><div class="h">💬 討論／反思</div><div class="b">${esc(c.discussion)}</div></div>`;
     }
@@ -681,36 +683,22 @@ function renderCaseDetail(){
     return;
   }
 
-  // 只有一次回診，或已經點進某次回診：顯示該次的 SOAP 輪次
-  const visit = openVisitKey!=null ? visits.find(v=>v.key===openVisitKey) : visits[0];
+  // 已點進某次回診：顯示該次的 SOAP 輪次
+  const visit = visits.find(v=>v.key===openVisitKey);
   const rounds = visit ? visit.rounds : [];
-  const multi = visits.length>1;
   let html=`<div style="display:flex;gap:8px;margin-bottom:10px">
-      <button class="chip" id="${multi?'backVisits':'backLib'}">‹ ${multi?'返回回診列表':'返回病例庫'}</button>
+      <button class="chip" id="backVisits">‹ 返回回診列表</button>
       ${canEdit(c)?`<button class="chip" id="editThis">✎ 編輯</button>`:""}
     </div>`;
-  if(multi){
-    html+=`<div class="card" style="margin-bottom:10px">
-        <div class="title">📋 ${esc(c.title)}</div>
-        <div class="byline">📅 ${esc(visit&&visit.date?visit.date:"未填日期")}</div>
-      </div>`;
-  }else{
-    html+=headerCard;
-  }
-  if(canEdit(c)) html+=`<button class="chip primary wide" id="addVisit" style="margin-bottom:12px;padding:12px">＋ 新增回診紀錄（新日期）</button>`;
+  html+=`<div class="card" style="margin-bottom:10px">
+      <div class="title">📋 ${esc(c.title)}</div>
+      <div class="byline">📅 ${esc(visit&&visit.date?visit.date:"未填日期")}</div>
+    </div>`;
   html+=renderRoundsHTML(rounds, c.complaints);
-  if(!multi && c.discussion && c.discussion.trim()){
-    html+=`<div class="discussbox"><div class="h">💬 討論／反思</div><div class="b">${esc(c.discussion)}</div></div>`;
-  }
   main.innerHTML=html;
-  const backLib=document.getElementById("backLib");
-  if(backLib) backLib.onclick=()=>{ libNav="list"; render(); };
-  const backVisits=document.getElementById("backVisits");
-  if(backVisits) backVisits.onclick=()=>{ openVisitKey=null; render(); };
+  document.getElementById("backVisits").onclick=()=>{ openVisitKey=null; render(); };
   const editBtn=document.getElementById("editThis");
   if(editBtn) editBtn.onclick=()=>openCaseEditor(c.id);
-  const addVisitBtn=document.getElementById("addVisit");
-  if(addVisitBtn) addVisitBtn.onclick=()=>openCaseEditor(c.id,{addRound:true});
 }
 
 /* ----- 我的紀錄 ----- */
