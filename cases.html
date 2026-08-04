@@ -603,6 +603,7 @@ function renderCaseDetail(){
         ${canEdit(c)?`<button class="chip" id="editThis">✎ 編輯</button>`:""}
       </div>`;
     html+=headerCard;
+    if(canEdit(c)) html+=`<button class="chip primary wide" id="addVisit" style="margin-bottom:12px;padding:12px">＋ 新增回診紀錄（新日期）</button>`;
     html+=`<div class="countLine">共 ${visits.length} 次回診紀錄，點選查看當次 SOAP</div>`;
     html+=visits.map(v=>`<div class="card" data-visit="${esc(v.key)}" style="cursor:pointer">
         <div class="row">
@@ -620,6 +621,8 @@ function renderCaseDetail(){
     document.getElementById("backLib").onclick=()=>{ libNav="list"; render(); };
     const editBtn=document.getElementById("editThis");
     if(editBtn) editBtn.onclick=()=>openCaseEditor(c.id);
+    const addVisitBtn=document.getElementById("addVisit");
+    if(addVisitBtn) addVisitBtn.onclick=()=>openCaseEditor(c.id,{addRound:true});
     main.querySelectorAll("[data-visit]").forEach(el=>el.onclick=()=>{
       openVisitKey=el.dataset.visit; render();
     });
@@ -642,6 +645,7 @@ function renderCaseDetail(){
   }else{
     html+=headerCard;
   }
+  if(canEdit(c)) html+=`<button class="chip primary wide" id="addVisit" style="margin-bottom:12px;padding:12px">＋ 新增回診紀錄（新日期）</button>`;
   html+=renderRoundsHTML(rounds);
   if(!multi && c.discussion && c.discussion.trim()){
     html+=`<div class="discussbox"><div class="h">💬 討論／反思</div><div class="b">${esc(c.discussion)}</div></div>`;
@@ -653,6 +657,8 @@ function renderCaseDetail(){
   if(backVisits) backVisits.onclick=()=>{ openVisitKey=null; render(); };
   const editBtn=document.getElementById("editThis");
   if(editBtn) editBtn.onclick=()=>openCaseEditor(c.id);
+  const addVisitBtn=document.getElementById("addVisit");
+  if(addVisitBtn) addVisitBtn.onclick=()=>openCaseEditor(c.id,{addRound:true});
 }
 
 /* ----- 我的紀錄 ----- */
@@ -769,7 +775,8 @@ function renderAdmin(){
 
 /* ----- 病例編輯表單（學員新增／編輯自己的病例，或管理者編輯任何病例） ----- */
 let editCase=null;
-function openCaseEditor(caseId){
+function openCaseEditor(caseId, opts){
+  opts = opts || {};
   if(caseId){
     const src=cases.find(c=>c.id===caseId);
     if(!canEdit(src)){ alert("這不是你建立的病例，且管理後台尚未解鎖，無法編輯。"); return; }
@@ -778,8 +785,19 @@ function openCaseEditor(caseId){
     editCase = {id:uid(), title:"", createdBy:{id:myId,name:myName}, createdAt:Date.now(), demographics:blankDemo(), soapRounds:[blankRound("初次評估")], discussion:""};
   }
   if(!editCase.demographics) editCase.demographics=blankDemo();
+  if(opts.addRound) editCase.soapRounds.push(blankRound(""));
   openSheet(caseEditorHTML(!!caseId));
   bindCaseEditor(!!caseId);
+  if(opts.addRound){
+    // 直接新增一輪：把表單捲到新加的那一輪，讓使用者不用滑過前面所有紀錄
+    const blocks=document.querySelectorAll("#sheet .soapedit");
+    const last=blocks[blocks.length-1];
+    if(last){
+      last.scrollIntoView({behavior:"smooth", block:"start"});
+      const dateInput=last.querySelector('input[type="date"]');
+      if(dateInput) setTimeout(()=>dateInput.focus(),300);
+    }
+  }
 }
 function caseEditorHTML(isEdit){
   let h=`<h3>${isEdit?"編輯病例":"新增病例"}</h3>
