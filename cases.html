@@ -10,9 +10,9 @@
   2. 沿用同一個 Firebase 專案（方便設定），但存在不同的 collection，不會跟旅遊/居家資料混在一起。
   3. 沒網路時自動只用本機儲存，照常可用；有網路時會自動同步，讓不同新進治療師的作答紀錄互通。
   4. 病例採用通用 SOAP 格式（不分骨科/心肺/神經/小兒），一個病例可以由多輪 S/O/A/P 組成
-     （例如：初次評估 → 治療測試 → 再評估 → 運動處方 → 複測），輪數不限，每輪內容都是自由文字。
-  5. 每位新進治療師都可以自己「＋ 新增病例」練習寫 SOAP，儲存後立即公開在病例庫；是否要附加
-     測驗題（選擇題／問答題）給別人作答是自由選擇，不寫也可以存檔。
+     （例如：初次評估 → 治療測試 → 再評估 → 運動處方 → 複測），每一輪可以各自標記看診日期，
+     用來記錄同一位病人跨越多次治療的完整病程；輪數不限，每輪內容都是自由文字。
+  5. 每位新進治療師都可以自己「＋ 新增病例」練習寫 SOAP，儲存後立即公開在病例庫。
   6. 「管理後台」用一組簡單的 PIN 碼把關（不是正式帳密系統），PIN 碼可在下面 ADMIN_PIN 直接修改；
      管理者可以編輯/刪除任何人的病例，一般學員只能編輯/刪除自己建立的病例。
 -->
@@ -157,27 +157,6 @@
   .discussbox .h{font-weight:800;color:#8a5c1e;font-size:14px;margin-bottom:6px;}
   .discussbox .b{font-size:14px;line-height:1.7;white-space:pre-wrap;}
 
-  .qcard{background:var(--card);border:2px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px;}
-  .qcard .qn{font-weight:800;font-size:15px;margin-bottom:10px;}
-  .optbtn{display:block;width:100%;text-align:left;padding:11px 13px;border:2px solid var(--line);border-radius:13px;
-    background:var(--card);color:var(--ink);font-size:14px;margin-bottom:8px;cursor:pointer;}
-  .optbtn.on{border-color:var(--teal);background:var(--teal-soft);font-weight:700;}
-  .optbtn.correct{border-color:var(--ok);background:#e7f3ec;color:var(--ok);font-weight:700;}
-  .optbtn.wrong{border-color:var(--err);background:#fbeae7;color:var(--err);font-weight:700;}
-  .optbtn:disabled{cursor:default;}
-  .explain{margin-top:8px;background:var(--card2);border-radius:12px;padding:10px 12px;font-size:13px;color:var(--ink);line-height:1.6;}
-  .explain b{color:var(--teal-deep);}
-  .selfrate{display:flex;gap:8px;margin-top:10px;}
-  .selfrate button{flex:1;padding:9px 4px;border:2px solid var(--line);border-radius:12px;background:var(--card);
-    color:var(--soft);font-size:12px;font-weight:700;cursor:pointer;}
-  .selfrate button.on{background:var(--teal);color:#fff;border-color:var(--teal);}
-  .myresp{background:var(--card2);border-radius:12px;padding:10px 12px;font-size:14px;white-space:pre-wrap;margin-bottom:6px;}
-
-  .scorebox{background:linear-gradient(135deg,var(--amber-soft),var(--card2));border:2px solid var(--amber);
-    border-radius:18px;padding:16px;margin-bottom:14px;text-align:center;}
-  .scorebox .big{font-size:30px;font-weight:800;color:#8a5c1e;}
-  .scorebox .sub{font-size:13px;color:var(--soft);margin-top:2px;}
-
   .statrow{display:flex;justify-content:space-between;padding:6px 0;font-size:14px;border-bottom:1px solid var(--card2);}
   .statrow:last-child{border-bottom:none;}
   .statrow b{color:var(--teal-deep);}
@@ -202,15 +181,6 @@
   .soapgroup{border-left:3px solid var(--teal);padding-left:10px;margin-bottom:10px;}
   .soapgroup:last-child{margin-bottom:0;}
   .soapgroup-h{display:flex;align-items:center;font-weight:800;font-size:13px;color:var(--teal-deep);margin-bottom:6px;}
-  .qedit{border:2px dashed var(--line);border-radius:14px;padding:12px;margin-bottom:12px;}
-  .qedit-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
-  .qedit-h .lbl{font-weight:800;font-size:13px;color:var(--teal-deep);}
-  .optrow{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
-  .optrow input{flex:1;}
-  .optrow .radiomark{width:26px;height:26px;border:2px solid var(--line);border-radius:50%;flex-shrink:0;cursor:pointer;
-    display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;}
-  .optrow .radiomark.on{background:var(--ok);border-color:var(--ok);}
-  .attempt-item{border-top:1px solid var(--card2);padding-top:10px;margin-top:10px;}
   .accordion{cursor:pointer;}
 </style>
 </head>
@@ -243,7 +213,7 @@
   <div class="idcard">
     <div class="ico">🩺</div>
     <h2>歡迎使用病例訓練系統</h2>
-    <p>請輸入你的姓名或代號，方便記錄你的病例與作答（不需要密碼）。</p>
+    <p>請輸入你的姓名或代號，方便記錄你建立的病例（不需要密碼）。</p>
     <input id="idNameInput" placeholder="例如：王小明" maxlength="20">
     <button class="chip primary wide" id="idNameSave" style="margin-top:14px;padding:12px">開始使用</button>
   </div>
@@ -251,7 +221,7 @@
 
 <script>
 /* ===== 本機儲存 key ===== */
-const CASE_KEY="ct_cases", TRAINEE_KEY="ct_trainees", ATTEMPT_KEY="ct_attempts";
+const CASE_KEY="ct_cases", TRAINEE_KEY="ct_trainees";
 const MY_ID_KEY="ct_my_id", MY_NAME_KEY="ct_my_name", ADMIN_OK_KEY="ct_admin_ok";
 
 function load(k,d){ try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d} }
@@ -259,12 +229,22 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
 function esc(s){return String(s??"").replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));}
 function clone(o){ return JSON.parse(JSON.stringify(o)); }
 function fmtDate(ts){ if(!ts) return ""; const d=new Date(ts); return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; }
-function blankRound(label){ return {id:uid(), label:label||"", s:[], general:{o:"",a:"",p:""}, items:[]}; }
-function blankDemo(){ return {gender:"", age:"", occupation:"", chronicHas:false, chronicDetail:"", sport:"", exerciseFreq:""}; }
+function blankRound(label){ return {id:uid(), label:label||"", date:"", s:[], general:{o:"",a:"",p:""}, items:[]}; }
+function blankDemo(){ return {surname:"", gender:"", age:"", occupation:"", chronicHas:false, chronicDetail:"", sport:"", exerciseFreq:""}; }
+/* 姓氏＋性別 → 稱謂，例如「李先生」「李小姐」；沒填姓氏就退回單純性別 */
+function honorific(d){
+  if(!d) return "";
+  if(d.surname){
+    if(d.gender==="男") return d.surname+"先生";
+    if(d.gender==="女") return d.surname+"小姐";
+    return d.surname;
+  }
+  return d.gender||"";
+}
 function demoSummary(d){
   if(!d) return "";
   const parts=[];
-  if(d.gender) parts.push(d.gender);
+  const h=honorific(d); if(h) parts.push(h);
   if(d.age) parts.push(d.age+"歲");
   if(d.occupation) parts.push(d.occupation);
   parts.push(d.chronicHas ? `慢性病：${d.chronicDetail||"有"}` : "無慢性病");
@@ -279,6 +259,7 @@ function circleNum(n){ return CIRCLE_NUMS[n] || `(${n})`; }
    沒有主訴項目時退回單一組共用的 general O/A/P。 */
 function normalizeCase(c){
   (c.soapRounds||[]).forEach(r=>{
+    if(typeof r.date!=="string") r.date="";
     if(typeof r.s==="string"){ r.s = r.s.trim() ? [r.s.trim()] : []; }
     if(!Array.isArray(r.s)) r.s=[];
     if(!r.items || !r.general){
@@ -306,12 +287,12 @@ function normalizeCase(c){
 function seedCases(){
   return [
     {
-      id:uid(), title:"右側腰背緊繃合併肩舉受限（案例示範：多輪 SOAP 假設檢驗）",
+      id:uid(), title:"2026/07/20 明德 陳先生 右側腰背緊繃合併肩舉受限（案例示範：多輪 SOAP 假設檢驗）",
       createdBy:{id:"seed", name:"系統範例"}, createdAt:Date.now(),
-      demographics:{gender:"男", age:"28", occupation:"上班族", chronicHas:false, chronicDetail:"", sport:"重量訓練", exerciseFreq:"每週2-3次"},
+      demographics:{surname:"陳", gender:"男", age:"28", occupation:"上班族", chronicHas:false, chronicDetail:"", sport:"重量訓練", exerciseFreq:"每週2-3次"},
       soapRounds:[
         {
-          id:uid(), label:"初次評估與快速治療測試",
+          id:uid(), label:"初次評估與快速治療測試", date:"2026-07-20",
           s:["身體側彎向左時，右腰會很緊，接近肋骨下緣、靠近胸腰關節（TL junction）附近。","右手舉手時角度受限，會有卡卡的感覺。"],
           general:{o:"",a:"",p:""},
           items:[
@@ -328,7 +309,7 @@ function seedCases(){
           ]
         },
         {
-          id:uid(), label:"運動評估與介入",
+          id:uid(), label:"運動評估與介入", date:"2026-07-27",
           s:[],
           general:{
             o:"（承上一輪問診：訓練習慣背多於胸，可能與代償型態有關）\n皮拉提斯動作評估：\n・伏地挺身：出現肩胛骨翼狀突出（scapula winging）\n・仰臥側滾至左側：動作品質差（抬腳跟時無法控制速度）",
@@ -338,7 +319,7 @@ function seedCases(){
           items:[]
         },
         {
-          id:uid(), label:"介入後複測",
+          id:uid(), label:"介入後複測", date:"2026-08-03",
           s:[],
           general:{
             o:"雙側軀幹側屈時，右下背已無夾擠/怪異感；軀幹旋轉AROM進步；右手舉手時已無緊繃感。",
@@ -347,17 +328,16 @@ function seedCases(){
           items:[]
         }
       ],
-      discussion:"討論問題：\n1. 如果闊背肌放鬆後的效果只能維持短期，你會怎麼調整介入策略？\n2. 除了前鋸肌與前側斜線筋膜，還有哪些構造或動作控制因素可能造成這位個案的旋轉活動度受限？\n3. 這個案例的假設檢驗順序（先QL、再胸大肌、最後闊背肌）合理嗎？如果是你，會怎麼安排優先順序？",
-      questions:[]
+      discussion:"討論問題：\n1. 如果闊背肌放鬆後的效果只能維持短期，你會怎麼調整介入策略？\n2. 除了前鋸肌與前側斜線筋膜，還有哪些構造或動作控制因素可能造成這位個案的旋轉活動度受限？\n3. 這個案例的假設檢驗順序（先QL、再胸大肌、最後闊背肌）合理嗎？如果是你，會怎麼安排優先順序？"
     },
     {
-      id:uid(), title:"肩關節術後夾擠症狀（案例示範：含測驗題）",
+      id:uid(), title:"2026/07/15 大安 林小姐 肩關節術後夾擠症狀（案例示範：單一主訴）",
       createdBy:{id:"seed", name:"系統範例"}, createdAt:Date.now()-1000,
-      demographics:{gender:"女", age:"45", occupation:"", chronicHas:false, chronicDetail:"", sport:"", exerciseFreq:"平時少運動"},
+      demographics:{surname:"林", gender:"女", age:"45", occupation:"", chronicHas:false, chronicDetail:"", sport:"", exerciseFreq:"平時少運動"},
       soapRounds:[
         {
-          id:uid(), label:"初次評估",
-          s:["45歲女性，肩關節鏡下夾擠症清創術後第4週，主訴上舉過頭時前側肩膀疼痛（VAS 4/10）。"],
+          id:uid(), label:"初次評估", date:"2026-07-15",
+          s:["肩關節鏡下夾擠症清創術後第4週，主訴上舉過頭時前側肩膀疼痛（VAS 4/10）。"],
           general:{o:"",a:"",p:""},
           items:[{
             o:"肩關節AROM前屈120°（健側170°），疼痛弧約在80-120°之間；MMT棘上肌4-/5、三角肌4/5；肩胛骨動作型態呈現上斜方肌代償上提。",
@@ -366,13 +346,7 @@ function seedCases(){
           }]
         }
       ],
-      discussion:"",
-      questions:[
-        {id:uid(),type:"mcq",prompt:"此階段治療最應避免的動作是？",
-          options:["疼痛範圍內的被動關節活動度訓練","過頭負重的阻力訓練","下斜方肌啟動運動","肩胛骨穩定訓練"],
-          answerIdx:1,
-          explanation:"術後早期合併夾擠症狀時，過頭負重的阻力訓練容易加重肩峰下發炎，應優先處理發炎與動作控制，待症狀穩定再漸進負重。"}
-      ]
+      discussion:""
     }
   ];
 }
@@ -380,16 +354,14 @@ function seedCases(){
 /* ===== 全域狀態 ===== */
 let cases    = (load(CASE_KEY, null) || seedCases()).map(normalizeCase);
 let trainees = load(TRAINEE_KEY, []);
-let attempts = load(ATTEMPT_KEY, []);
 
 let myId   = localStorage.getItem(MY_ID_KEY) || "";
 let myName = localStorage.getItem(MY_NAME_KEY) || "";
 let adminUnlocked = localStorage.getItem(ADMIN_OK_KEY) === "1";
 
 let view = "library";
-let libNav = "list";        // list | quiz
+let libNav = "list";        // list | detail
 let openCaseId = null;
-let curQuiz = null;          // {caseId, submitted, attemptId, selected, responses}
 
 let adminSub = "cases";      // cases | trainees
 let adminExpand = null;      // 展開中的學員 id
@@ -397,7 +369,6 @@ let adminExpand = null;      // 展開中的學員 id
 /* ===== 儲存 ===== */
 function saveCases(){ localStorage.setItem(CASE_KEY,JSON.stringify(cases)); cloudPush(); }
 function saveTrainees(){ localStorage.setItem(TRAINEE_KEY,JSON.stringify(trainees)); cloudPush(); }
-function saveAttempts(){ localStorage.setItem(ATTEMPT_KEY,JSON.stringify(attempts)); cloudPush(); }
 
 /* ===== Firebase 雲端同步 ===== */
 const SHARE_DOC = "fae67c9acc9873b47976c33d2c862243";
@@ -411,7 +382,7 @@ function cloudPush(){
   if(!cloudReady) return;
   clearTimeout(cloudTimer);
   cloudTimer=setTimeout(()=>{
-    cloudRef.set({ cases, trainees, attempts, updatedAt:Date.now() })
+    cloudRef.set({ cases, trainees, updatedAt:Date.now() })
       .then(()=>setSyncBadge("ok"))
       .catch(e=>{ console.warn("雲端儲存失敗",e); setSyncBadge("err"); });
   },800);
@@ -425,14 +396,12 @@ function cloudInit(){
       cloudSkipPush=true;
       if(Array.isArray(d.cases))    cases=d.cases.map(normalizeCase);
       if(Array.isArray(d.trainees)) trainees=d.trainees;
-      if(Array.isArray(d.attempts)) attempts=d.attempts;
       localStorage.setItem(CASE_KEY,JSON.stringify(cases));
       localStorage.setItem(TRAINEE_KEY,JSON.stringify(trainees));
-      localStorage.setItem(ATTEMPT_KEY,JSON.stringify(attempts));
       cloudReady=true; setSyncBadge("ok"); render();
     }else{
       cloudReady=true;
-      cloudRef.set({ cases, trainees, attempts, updatedAt:Date.now() })
+      cloudRef.set({ cases, trainees, updatedAt:Date.now() })
         .then(()=>setSyncBadge("ok")).catch(()=>setSyncBadge("err"));
     }
   }, err=>{ console.warn("雲端讀取失敗",err); setSyncBadge("err"); cloudReady=false; });
@@ -489,14 +458,14 @@ document.getElementById("mask").onclick=closeSheet;
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{
   view=b.dataset.view;
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===b));
-  if(view==="library"){ libNav="list"; openCaseId=null; curQuiz=null; }
+  if(view==="library"){ libNav="list"; openCaseId=null; }
   render();
 });
 
 /* ===== render dispatcher ===== */
 function render(){
   if(!ensureIdentity()) return;
-  if(view==="library"){ libNav==="quiz" ? renderQuiz() : renderLibrary(); }
+  if(view==="library"){ libNav==="detail" ? renderCaseDetail() : renderLibrary(); }
   else if(view==="mine") renderMine();
   else renderAdmin();
 }
@@ -514,13 +483,10 @@ function renderLibrary(){
     html+=`<div class="empty"><div class="big">還沒有病例</div>按上方「＋ 新增病例」建立第一個吧。</div>`;
   }else{
     html+=list.map(c=>{
-      const my=attempts.filter(a=>a.traineeId===myId && a.caseId===c.id);
-      const best = my.length ? Math.max(...my.map(a=>Math.round(100*a.score/Math.max(a.maxScore,1)))) : null;
       const rounds=(c.soapRounds||[]).length;
-      const hasQuiz=(c.questions||[]).length>0;
       const mine=canEdit(c);
       const d=c.demographics||{};
-      const quickDemo=[d.gender, d.age?d.age+"歲":""].filter(Boolean).join("・");
+      const quickDemo=[honorific(d), d.age?d.age+"歲":""].filter(Boolean).join("・");
       return `<div class="card">
         <div class="row" data-open="${c.id}" style="cursor:pointer">
           <div style="flex:1">
@@ -528,9 +494,7 @@ function renderLibrary(){
             <div class="byline">由 ${esc(c.createdBy?c.createdBy.name:"未知")} 建立・${fmtDate(c.createdAt)}${quickDemo?`　👤 ${esc(quickDemo)}`:""}</div>
             <div style="margin-top:6px">
               <span class="tag mute">共 ${rounds} 輪 SOAP</span>
-              ${hasQuiz?`<span class="tag">附測驗</span>`:`<span class="tag mute">僅供閱讀</span>`}
             </div>
-            <div class="meta" style="margin-top:6px">${hasQuiz ? (my.length?`已作答 ${my.length} 次・最佳 ${best}%`:"尚未作答") : ""}</div>
           </div>
           <div class="mini" style="align-self:center">›</div>
         </div>
@@ -544,7 +508,7 @@ function renderLibrary(){
   main.innerHTML=html;
   document.getElementById("newCase").onclick=()=>openCaseEditor(null);
   main.querySelectorAll("[data-open]").forEach(c=>c.onclick=()=>{
-    openCaseId=c.dataset.open; libNav="quiz"; initQuiz(openCaseId); render();
+    openCaseId=c.dataset.open; libNav="detail"; render();
   });
   main.querySelectorAll("[data-edit]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); openCaseEditor(b.dataset.edit); });
   main.querySelectorAll("[data-del]").forEach(b=>b.onclick=e=>{
@@ -555,16 +519,8 @@ function renderLibrary(){
   });
 }
 
-/* ----- 病例庫：作答 / 閱讀 ----- */
-function initQuiz(caseId){
-  curQuiz = { caseId, submitted:false, attemptId:null, selected:{}, responses:{} };
-}
-function scoreAttempt(a){
-  const max=a.answers.length;
-  const score=a.answers.reduce((s,x)=> s + (x.type==="mcq" ? (x.correct?1:0) : (x.selfRate??0)), 0);
-  a.maxScore=max; a.score=score;
-}
-function renderQuiz(){
+/* ----- 病例庫：閱讀病例詳情 ----- */
+function renderCaseDetail(){
   const main=document.getElementById("main");
   const c=cases.find(x=>x.id===openCaseId);
   if(!c){ libNav="list"; render(); return; }
@@ -582,7 +538,7 @@ function renderQuiz(){
 
   (c.soapRounds||[]).forEach((r,ri)=>{
     html+=`<div class="soapview">
-        <div class="soapview-h">🔁 第 ${ri+1} 輪${r.label?`：${esc(r.label)}`:""}</div>`;
+        <div class="soapview-h">🔁 第 ${ri+1} 輪${r.label?`：${esc(r.label)}`:""}${r.date?`　📅 ${esc(r.date)}`:""}</div>`;
     if((r.s||[]).length){
       r.s.forEach((item,si)=>{
         const it=(r.items||[])[si]||{};
@@ -610,126 +566,41 @@ function renderQuiz(){
     html+=`<div class="discussbox"><div class="h">💬 討論／反思</div><div class="b">${esc(c.discussion)}</div></div>`;
   }
 
-  const questions=c.questions||[];
-  const attempt = curQuiz.submitted ? attempts.find(a=>a.id===curQuiz.attemptId) : null;
-
-  if(!questions.length){
-    html+=`<div class="mini" style="text-align:center;padding:12px 0">這個病例沒有附加測驗，純供研讀與討論。</div>`;
-  }else{
-    questions.forEach((q,qi)=>{
-      const ansEntry = attempt ? attempt.answers.find(a=>a.qid===q.id) : null;
-      html+=`<div class="qcard"><div class="qn">Q${qi+1}. ${esc(q.prompt)}</div>`;
-      if(q.type==="mcq"){
-        (q.options||[]).forEach((opt,oi)=>{
-          let cls="";
-          if(curQuiz.submitted){
-            if(oi===q.answerIdx) cls="correct";
-            else if(oi===(ansEntry?ansEntry.selectedIdx:-1)) cls="wrong";
-          }else if(curQuiz.selected[q.id]===oi){ cls="on"; }
-          html+=`<button class="optbtn ${cls}" data-mcq="${q.id}|${oi}" ${curQuiz.submitted?"disabled":""}>${esc(opt)}</button>`;
-        });
-        if(curQuiz.submitted && q.explanation){
-          html+=`<div class="explain"><b>說明：</b>${esc(q.explanation)}</div>`;
-        }
-      }else{
-        if(!curQuiz.submitted){
-          html+=`<textarea data-open="${q.id}" placeholder="輸入你的想法…">${esc(curQuiz.responses[q.id]||"")}</textarea>`;
-        }else{
-          html+=`<div class="myresp">${esc(ansEntry?ansEntry.response:"").replace(/\n/g,"<br>")||"（未作答）"}</div>
-            <div class="explain"><b>參考答案：</b>${esc(q.modelAnswer||"")}</div>
-            <div class="mini" style="margin-top:8px">請對照參考答案自評：</div>
-            <div class="selfrate">
-              <button class="${ansEntry.selfRate===0?'on':''}" data-rate="${q.id}|0">待加強</button>
-              <button class="${ansEntry.selfRate===0.5?'on':''}" data-rate="${q.id}|0.5">普通</button>
-              <button class="${ansEntry.selfRate===1?'on':''}" data-rate="${q.id}|1">答對</button>
-            </div>`;
-        }
-      }
-      html+=`</div>`;
-    });
-
-    if(!curQuiz.submitted){
-      html+=`<button class="chip primary wide" id="submitQuiz" style="padding:13px">提交作答</button>`;
-    }else if(attempt){
-      const pct=Math.round(100*attempt.score/Math.max(attempt.maxScore,1));
-      html+=`<div class="scorebox"><div class="big">${pct}%</div><div class="sub">本次得分 ${attempt.score} / ${attempt.maxScore}</div></div>`;
-      html+=`<button class="chip wide" id="doneQuiz" style="padding:13px">完成，返回病例庫</button>`;
-    }
-  }
-
   main.innerHTML=html;
-  document.getElementById("backLib").onclick=()=>{ libNav="list"; curQuiz=null; render(); };
+  document.getElementById("backLib").onclick=()=>{ libNav="list"; render(); };
   const editBtn=document.getElementById("editThis");
   if(editBtn) editBtn.onclick=()=>openCaseEditor(c.id);
-  main.querySelectorAll("[data-mcq]").forEach(b=>b.onclick=()=>{
-    const [qid,oi]=b.dataset.mcq.split("|");
-    curQuiz.selected[qid]=Number(oi); renderQuiz();
-  });
-  main.querySelectorAll("[data-open]").forEach(ta=>ta.oninput=()=>{
-    curQuiz.responses[ta.dataset.open]=ta.value;
-  });
-  const submitBtn=document.getElementById("submitQuiz");
-  if(submitBtn) submitBtn.onclick=()=>submitQuiz(c);
-  main.querySelectorAll("[data-rate]").forEach(b=>b.onclick=()=>{
-    const [qid,val]=b.dataset.rate.split("|");
-    const a=attempts.find(x=>x.id===curQuiz.attemptId);
-    const entry=a.answers.find(x=>x.qid===qid);
-    entry.selfRate=Number(val);
-    scoreAttempt(a); saveAttempts(); renderQuiz();
-  });
-  const doneBtn=document.getElementById("doneQuiz");
-  if(doneBtn) doneBtn.onclick=()=>{ libNav="list"; curQuiz=null; render(); };
-}
-function submitQuiz(c){
-  const answers=(c.questions||[]).map(q=>{
-    if(q.type==="mcq"){
-      const selectedIdx = curQuiz.selected[q.id];
-      return {qid:q.id, type:"mcq", selectedIdx: selectedIdx===undefined?-1:selectedIdx, correct: selectedIdx===q.answerIdx};
-    }
-    return {qid:q.id, type:"open", response: curQuiz.responses[q.id]||"", selfRate:null};
-  });
-  const attempt={
-    id:uid(), traineeId:myId, traineeName:myName,
-    caseId:c.id, caseTitle:c.title,
-    answers, submittedAt:Date.now()
-  };
-  scoreAttempt(attempt);
-  attempts.push(attempt);
-  saveAttempts();
-  curQuiz.submitted=true; curQuiz.attemptId=attempt.id;
-  renderQuiz();
 }
 
 /* ----- 我的紀錄 ----- */
 function renderMine(){
   const main=document.getElementById("main");
   const myCases=cases.filter(c=>c.createdBy&&c.createdBy.id===myId).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-  const mine=attempts.filter(a=>a.traineeId===myId).sort((a,b)=>b.submittedAt-a.submittedAt);
 
-  let html=`<div class="card"><div class="title" style="margin-bottom:6px">📚 我建立的病例</div>`;
-  html+= myCases.length
-    ? myCases.map(c=>`<div class="statrow"><span>${esc(c.title)}</span><span class="mini">${fmtDate(c.createdAt)}</span></div>`).join("")
-    : `<div class="mini">還沒有自己建立的病例，到「病例庫」按＋新增病例試試看。</div>`;
-  html+=`</div>`;
-
-  html+=`<div class="countLine">共作答 ${mine.length} 次</div>`;
-  if(!mine.length){
-    html+=`<div class="empty"><div class="big">還沒有測驗作答紀錄</div>到「病例庫」找一個附測驗的病例來練習吧。</div>`;
+  let html=`<div class="countLine">我建立的病例（共 ${myCases.length} 個）</div>`;
+  if(!myCases.length){
+    html+=`<div class="empty"><div class="big">還沒有自己建立的病例</div>到「病例庫」按＋新增病例試試看。</div>`;
   }else{
-    html+=mine.map(a=>{
-      const pct=Math.round(100*a.score/Math.max(a.maxScore,1));
-      return `<div class="card">
+    html+=myCases.map(c=>{
+      const rounds=(c.soapRounds||[]).length;
+      return `<div class="card" data-open="${c.id}" style="cursor:pointer">
         <div class="row">
           <div style="flex:1">
-            <div class="title">${esc(a.caseTitle)}</div>
-            <div class="meta">${fmtDate(a.submittedAt)}</div>
+            <div class="title">📋 ${esc(c.title)}</div>
+            <div class="byline">${fmtDate(c.createdAt)}</div>
+            <div style="margin-top:6px"><span class="tag mute">共 ${rounds} 輪 SOAP</span></div>
           </div>
-          <div class="tag amber">${pct}%</div>
+          <div class="mini" style="align-self:center">›</div>
         </div>
       </div>`;
     }).join("");
   }
   main.innerHTML=html;
+  main.querySelectorAll("[data-open]").forEach(c=>c.onclick=()=>{
+    openCaseId=c.dataset.open; view="library"; libNav="detail";
+    document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on", x.dataset.view==="library"));
+    render();
+  });
 }
 
 /* ----- 管理後台 ----- */
@@ -765,7 +636,7 @@ function renderAdmin(){
       html+=cases.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(c=>`<div class="card"><div class="adminrow">
           <div class="info">
             <div class="title">${esc(c.title)}</div>
-            <div class="meta">由 ${esc(c.createdBy?c.createdBy.name:"未知")} 建立・${(c.soapRounds||[]).length}輪SOAP・${(c.questions||[]).length}題測驗</div>
+            <div class="meta">由 ${esc(c.createdBy?c.createdBy.name:"未知")} 建立・${(c.soapRounds||[]).length}輪SOAP</div>
           </div>
           <button class="iconbtn" data-edit="${c.id}">✎</button>
           <button class="iconbtn del" data-del="${c.id}">🗑</button>
@@ -776,35 +647,20 @@ function renderAdmin(){
       html+=`<div class="empty"><div class="big">還沒有學員紀錄</div>新進治療師開始使用後會顯示在這裡。</div>`;
     }else{
       html+=trainees.slice().sort((a,b)=>a.name.localeCompare(b.name,"zh-Hant")).map(tr=>{
-        const tAttempts=attempts.filter(a=>a.traineeId===tr.id).sort((a,b)=>b.submittedAt-a.submittedAt);
-        const tCases=cases.filter(c=>c.createdBy&&c.createdBy.id===tr.id);
-        const avgPct = tAttempts.length ? Math.round(100*tAttempts.reduce((s,a)=>s+a.score,0)/Math.max(tAttempts.reduce((s,a)=>s+a.maxScore,0),1)) : null;
+        const tCases=cases.filter(c=>c.createdBy&&c.createdBy.id===tr.id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
         const expanded = adminExpand===tr.id;
         let block=`<div class="card">
             <div class="row accordion" data-expand="${tr.id}">
               <div style="flex:1">
                 <div class="title">${esc(tr.name)}</div>
-                <div class="meta">建立 ${tCases.length} 個病例・作答 ${tAttempts.length} 次${avgPct!=null?`・平均 ${avgPct}%`:""}</div>
+                <div class="meta">建立 ${tCases.length} 個病例</div>
               </div>
               <div class="mini">${expanded?"▲":"▼"}</div>
             </div>`;
         if(expanded){
-          if(!tAttempts.length){
-            block+=`<div class="mini" style="margin-top:8px">尚無測驗作答紀錄</div>`;
-          }else{
-            block+=tAttempts.map(a=>{
-              const pct=Math.round(100*a.score/Math.max(a.maxScore,1));
-              const details=a.answers.map(ans=>{
-                if(ans.type==="mcq") return `<div class="mini">・${ans.correct?"✓":"✕"} 選擇題</div>`;
-                return `<div class="mini">・問答：${esc(ans.response||"（未作答）")}</div>`;
-              }).join("");
-              return `<div class="attempt-item">
-                  <div style="display:flex;justify-content:space-between"><b>${esc(a.caseTitle)}</b><span>${pct}%</span></div>
-                  <div class="mini">${fmtDate(a.submittedAt)}</div>
-                  ${details}
-                </div>`;
-            }).join("");
-          }
+          block+= tCases.length
+            ? tCases.map(c=>`<div class="statrow"><span>${esc(c.title)}</span><span class="mini">${fmtDate(c.createdAt)}</span></div>`).join("")
+            : `<div class="mini" style="margin-top:8px">尚未建立病例</div>`;
         }
         block+=`</div>`;
         return block;
@@ -836,7 +692,7 @@ function openCaseEditor(caseId){
     if(!canEdit(src)){ alert("這不是你建立的病例，且管理後台尚未解鎖，無法編輯。"); return; }
     editCase = clone(src);
   }else{
-    editCase = {id:uid(), title:"", createdBy:{id:myId,name:myName}, createdAt:Date.now(), demographics:blankDemo(), soapRounds:[blankRound("初次評估")], discussion:"", questions:[]};
+    editCase = {id:uid(), title:"", createdBy:{id:myId,name:myName}, createdAt:Date.now(), demographics:blankDemo(), soapRounds:[blankRound("初次評估")], discussion:""};
   }
   if(!editCase.demographics) editCase.demographics=blankDemo();
   openSheet(caseEditorHTML(!!caseId));
@@ -849,6 +705,8 @@ function caseEditorHTML(isEdit){
     <input id="ceTitle" value="${esc(editCase.title)}" placeholder="例如：2026/08/04 明德 右側肩膀">
     <div class="soapedit" style="margin-top:14px">
       <label style="margin-top:0">基本資料（選填）</label>
+      <label style="margin:10px 0 3px">姓氏</label>
+      <input id="ceSurname" value="${esc(editCase.demographics.surname)}" placeholder="例如：李（會自動顯示成「李先生／李小姐」）">
       <label style="margin:10px 0 3px">性別</label>
       <div class="seg" id="ceGender">${["男","女","其他"].map(g=>`<button type="button" data-v="${g}" class="${editCase.demographics.gender===g?'on':''}">${g}</button>`).join("")}</div>
       <label>年齡</label>
@@ -873,6 +731,8 @@ function caseEditorHTML(isEdit){
           <input data-rlabel="${ri}" value="${esc(r.label)}" placeholder="第${ri+1}輪標題（選填，例如：初次評估／介入後複測）">
           <button class="iconbtn del" data-rdel="${ri}">🗑</button>
         </div>
+        <label style="margin:8px 0 3px">看診日期（選填，方便記錄同一位病人跨多次治療的病程）</label>
+        <input type="date" data-rdate="${ri}" value="${esc(r.date||"")}" style="max-width:220px">
         <label style="margin:8px 0 3px">S 主觀資料（如果有多個主訴，分開列出，O/A/P 就會自動分開填寫，畫面才不會擠在一起）</label>`;
     (r.s||[]).forEach((item,si)=>{
       h+=`<div class="complaint-row"><span class="numbadge">${circleNum(si+1)}</span>
@@ -909,32 +769,6 @@ function caseEditorHTML(isEdit){
   h+=`<button class="chip wide" id="addRound" style="margin-bottom:14px">＋ 新增下一輪 SOAP</button>`;
   h+=`<label>討論／反思（選填）</label>
     <textarea id="ceDiscuss" placeholder="例如：如果這個假設不成立，還有哪些可能？">${esc(editCase.discussion||"")}</textarea>`;
-
-  h+=`<label style="margin-top:18px">測驗題（選填，不加也可以直接儲存）</label>`;
-  (editCase.questions||[]).forEach((q,qi)=>{
-    h+=`<div class="qedit">
-        <div class="qedit-h"><span class="lbl">${q.type==="mcq"?"選擇題":"問答題"} ${qi+1}</span>
-          <button class="iconbtn del" data-qdel="${qi}">🗑</button></div>
-        <textarea data-qprompt="${qi}" placeholder="題目內容">${esc(q.prompt)}</textarea>`;
-    if(q.type==="mcq"){
-      (q.options||[]).forEach((opt,oi)=>{
-        h+=`<div class="optrow">
-            <div class="radiomark ${q.answerIdx===oi?'on':''}" data-qcorrect="${qi}|${oi}">${q.answerIdx===oi?'✓':''}</div>
-            <input data-qopt="${qi}|${oi}" value="${esc(opt)}" placeholder="選項內容">
-            <button class="iconbtn del" data-qoptdel="${qi}|${oi}">✕</button>
-          </div>`;
-      });
-      h+=`<button class="chip" data-qoptadd="${qi}" style="margin:4px 0">＋ 新增選項</button>
-        <textarea data-qexplain="${qi}" placeholder="正解說明（作答後顯示）">${esc(q.explanation||"")}</textarea>`;
-    }else{
-      h+=`<textarea data-qmodel="${qi}" placeholder="參考答案（作答後顯示，供學員自評）">${esc(q.modelAnswer||"")}</textarea>`;
-    }
-    h+=`</div>`;
-  });
-  h+=`<div style="display:flex;gap:8px;margin-top:6px">
-      <button class="chip" id="addMcq" style="flex:1">＋ 選擇題</button>
-      <button class="chip" id="addOpen" style="flex:1">＋ 問答題</button>
-    </div>`;
   h+=`<div class="btns"><button class="cancel" id="ceCancel">取消</button><button class="save" id="ceSave">儲存</button></div>`;
   if(isEdit) h+=`<button class="del" id="ceDel">刪除此病例</button>`;
   return h;
@@ -947,6 +781,7 @@ function bindCaseEditor(isEdit){
   document.getElementById("ceTitle").oninput=e=>editCase.title=e.target.value;
   document.getElementById("ceDiscuss").oninput=e=>editCase.discussion=e.target.value;
 
+  document.getElementById("ceSurname").oninput=e=>editCase.demographics.surname=e.target.value;
   document.querySelectorAll("#ceGender button").forEach(b=>b.onclick=()=>{
     editCase.demographics.gender = editCase.demographics.gender===b.dataset.v ? "" : b.dataset.v;
     refreshEditorSheet(isEdit);
@@ -964,6 +799,7 @@ function bindCaseEditor(isEdit){
 
   function autoGrow(el){ el.style.height="auto"; el.style.height=(el.scrollHeight+2)+"px"; }
   document.querySelectorAll("[data-rlabel]").forEach(inp=>inp.oninput=e=>{ editCase.soapRounds[+inp.dataset.rlabel].label=e.target.value; });
+  document.querySelectorAll("[data-rdate]").forEach(inp=>inp.oninput=e=>{ editCase.soapRounds[+inp.dataset.rdate].date=e.target.value; });
   document.querySelectorAll("[data-rdel]").forEach(b=>b.onclick=()=>{
     if(editCase.soapRounds.length<=1){ alert("至少要保留一輪 SOAP"); return; }
     editCase.soapRounds.splice(+b.dataset.rdel,1); refreshEditorSheet(isEdit);
@@ -997,43 +833,10 @@ function bindCaseEditor(isEdit){
     refreshEditorSheet(isEdit);
   });
 
-  document.querySelectorAll("[data-qprompt]").forEach(t=>t.oninput=e=>{ editCase.questions[+t.dataset.qprompt].prompt=e.target.value; });
-  document.querySelectorAll("[data-qexplain]").forEach(t=>t.oninput=e=>{ editCase.questions[+t.dataset.qexplain].explanation=e.target.value; });
-  document.querySelectorAll("[data-qmodel]").forEach(t=>t.oninput=e=>{ editCase.questions[+t.dataset.qmodel].modelAnswer=e.target.value; });
-  document.querySelectorAll("[data-qopt]").forEach(inp=>inp.oninput=e=>{
-    const [qi,oi]=inp.dataset.qopt.split("|"); editCase.questions[+qi].options[+oi]=e.target.value;
-  });
-  document.querySelectorAll("[data-qcorrect]").forEach(b=>b.onclick=()=>{
-    const [qi,oi]=b.dataset.qcorrect.split("|"); editCase.questions[+qi].answerIdx=+oi; refreshEditorSheet(isEdit);
-  });
-  document.querySelectorAll("[data-qoptadd]").forEach(b=>b.onclick=()=>{
-    editCase.questions[+b.dataset.qoptadd].options.push(""); refreshEditorSheet(isEdit);
-  });
-  document.querySelectorAll("[data-qoptdel]").forEach(b=>b.onclick=()=>{
-    const [qi,oi]=b.dataset.qoptdel.split("|"); const q=editCase.questions[+qi];
-    q.options.splice(+oi,1);
-    if(q.answerIdx>=q.options.length) q.answerIdx=0;
-    refreshEditorSheet(isEdit);
-  });
-  document.querySelectorAll("[data-qdel]").forEach(b=>b.onclick=()=>{
-    editCase.questions.splice(+b.dataset.qdel,1); refreshEditorSheet(isEdit);
-  });
-  document.getElementById("addMcq").onclick=()=>{
-    editCase.questions.push({id:uid(),type:"mcq",prompt:"",options:["",""],answerIdx:0,explanation:""});
-    refreshEditorSheet(isEdit);
-  };
-  document.getElementById("addOpen").onclick=()=>{
-    editCase.questions.push({id:uid(),type:"open",prompt:"",modelAnswer:""});
-    refreshEditorSheet(isEdit);
-  };
   document.getElementById("ceCancel").onclick=closeSheet;
   document.getElementById("ceSave").onclick=()=>{
     if(!editCase.title.trim()){ alert("請輸入病例標題"); return; }
     if(!editCase.soapRounds.length){ alert("請至少保留一輪 SOAP"); return; }
-    for(const q of editCase.questions){
-      if(!q.prompt.trim()){ alert("有測驗題目是空的，請補齊或刪除該題"); return; }
-      if(q.type==="mcq" && (q.options||[]).some(o=>!o.trim())){ alert("選擇題的選項內容不能空白"); return; }
-    }
     const idx=cases.findIndex(c=>c.id===editCase.id);
     if(idx>=0) cases[idx]=editCase; else cases.push(editCase);
     saveCases(); closeSheet(); render();
