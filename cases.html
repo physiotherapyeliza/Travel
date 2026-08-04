@@ -421,14 +421,26 @@ let openVisitKey = null;    // 選中的回診日期分組（case 內有多次�
 
 /* 把病例的 SOAP 輪次分組成一次次回診紀錄。每一輪不用各自填日期——只有「開啟新回診」
    的那一輪（第一輪、或標記 newVisit 的輪次）才帶日期，後面接續的輪次自動算同一次回診，
-   不看它們自己的 date 欄位（避免因為填寫順序造成日期對不起來）。 */
+   不看它們自己的 date 欄位（避免因為填寫順序造成日期對不起來）。
+   只要日期相同（例如同一天做了好幾輪主訴衍生的追蹤治療），就一定合併成同一張回診卡片，
+   不會出現兩張日期一樣的卡片。 */
 function groupVisits(rounds){
-  const groups=[];
+  const raw=[];
   (rounds||[]).forEach((r,i)=>{
-    if(i===0 || r.newVisit || !groups.length){
-      groups.push({key:r.id, date:r.date||"", rounds:[]});
+    if(i===0 || r.newVisit || !raw.length){
+      raw.push({key:r.id, date:r.date||"", rounds:[]});
     }
-    groups[groups.length-1].rounds.push(r);
+    raw[raw.length-1].rounds.push(r);
+  });
+  const groups=[];
+  const byDate=new Map();
+  raw.forEach(g=>{
+    if(g.date && byDate.has(g.date)){
+      byDate.get(g.date).rounds.push(...g.rounds);
+    }else{
+      groups.push(g);
+      if(g.date) byDate.set(g.date, g);
+    }
   });
   groups.sort((a,b)=>{
     if(!a.date && !b.date) return 0;
