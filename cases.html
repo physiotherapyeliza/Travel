@@ -309,6 +309,16 @@ function seedCases(){
           ]
         },
         {
+          id:uid(), label:"衛教與居家建議", date:"2026-07-20",
+          s:[],
+          general:{
+            o:"",
+            a:"",
+            p:"衛教：建議近期先暫停背部訓練頻率，增加胸部／前側肌群訓練比例；提供居家闊背肌自我按摩球放鬆衛教，並約1週後回診複評。"
+          },
+          items:[]
+        },
+        {
           id:uid(), label:"運動評估與介入", date:"2026-07-27",
           s:[],
           general:{
@@ -362,6 +372,25 @@ let adminUnlocked = localStorage.getItem(ADMIN_OK_KEY) === "1";
 let view = "library";
 let libNav = "list";        // list | detail
 let openCaseId = null;
+let openVisitKey = null;    // 選中的回診日期分組（case 內有多次回診時才用得到）
+
+/* 把病例的 SOAP 輪次依「看診日期」分組成一次次回診紀錄；沒填日期的輪次歸在同一組 */
+function groupVisits(rounds){
+  const map=new Map();
+  (rounds||[]).forEach(r=>{
+    const key=r.date||"__nodate__";
+    if(!map.has(key)) map.set(key,{key, date:r.date||"", rounds:[]});
+    map.get(key).rounds.push(r);
+  });
+  const groups=Array.from(map.values());
+  groups.sort((a,b)=>{
+    if(!a.date && !b.date) return 0;
+    if(!a.date) return 1;
+    if(!b.date) return -1;
+    return a.date.localeCompare(b.date);
+  });
+  return groups;
+}
 
 let adminSub = "cases";      // cases | trainees
 let adminExpand = null;      // 展開中的學員 id
@@ -458,7 +487,7 @@ document.getElementById("mask").onclick=closeSheet;
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{
   view=b.dataset.view;
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===b));
-  if(view==="library"){ libNav="list"; openCaseId=null; }
+  if(view==="library"){ libNav="list"; openCaseId=null; openVisitKey=null; }
   render();
 });
 
@@ -483,17 +512,19 @@ function renderLibrary(){
     html+=`<div class="empty"><div class="big">還沒有病例</div>按上方「＋ 新增病例」建立第一個吧。</div>`;
   }else{
     html+=list.map(c=>{
+      const visits=groupVisits(c.soapRounds);
       const rounds=(c.soapRounds||[]).length;
       const mine=canEdit(c);
       const d=c.demographics||{};
       const quickDemo=[honorific(d), d.age?d.age+"歲":""].filter(Boolean).join("・");
+      const roundsTag = visits.length>1 ? `共 ${visits.length} 次回診・${rounds} 輪 SOAP` : `共 ${rounds} 輪 SOAP`;
       return `<div class="card">
         <div class="row" data-open="${c.id}" style="cursor:pointer">
           <div style="flex:1">
             <div class="title">📋 ${esc(c.title)}</div>
             <div class="byline">由 ${esc(c.createdBy?c.createdBy.name:"未知")} 建立・${fmtDate(c.createdAt)}${quickDemo?`　👤 ${esc(quickDemo)}`:""}</div>
             <div style="margin-top:6px">
-              <span class="tag mute">共 ${rounds} 輪 SOAP</span>
+              <span class="tag mute">${roundsTag}</span>
             </div>
           </div>
           <div class="mini" style="align-self:center">›</div>
@@ -508,7 +539,7 @@ function renderLibrary(){
   main.innerHTML=html;
   document.getElementById("newCase").onclick=()=>openCaseEditor(null);
   main.querySelectorAll("[data-open]").forEach(c=>c.onclick=()=>{
-    openCaseId=c.dataset.open; libNav="detail"; render();
+    openCaseId=c.dataset.open; libNav="detail"; openVisitKey=null; render();
   });
   main.querySelectorAll("[data-edit]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); openCaseEditor(b.dataset.edit); });
   main.querySelectorAll("[data-del]").forEach(b=>b.onclick=e=>{
@@ -520,25 +551,11 @@ function renderLibrary(){
 }
 
 /* ----- 病例庫：閱讀病例詳情 ----- */
-function renderCaseDetail(){
-  const main=document.getElementById("main");
-  const c=cases.find(x=>x.id===openCaseId);
-  if(!c){ libNav="list"; render(); return; }
-
-  let html=`<div style="display:flex;gap:8px;margin-bottom:10px">
-      <button class="chip" id="backLib">‹ 返回病例庫</button>
-      ${canEdit(c)?`<button class="chip" id="editThis">✎ 編輯</button>`:""}
-    </div>`;
-  const demoText=demoSummary(c.demographics);
-  html+=`<div class="card" style="margin-bottom:10px">
-      <div class="title">📋 ${esc(c.title)}</div>
-      <div class="byline">由 ${esc(c.createdBy?c.createdBy.name:"未知")} 建立・${fmtDate(c.createdAt)}</div>
-      ${demoText?`<div class="demoline"><span class="lbl">👤 </span>${esc(demoText)}</div>`:""}
-    </div>`;
-
-  (c.soapRounds||[]).forEach((r,ri)=>{
+function renderRoundsHTML(rounds){
+  let html="";
+  (rounds||[]).forEach((r,ri)=>{
     html+=`<div class="soapview">
-        <div class="soapview-h">🔁 第 ${ri+1} 輪${r.label?`：${esc(r.label)}`:""}${r.date?`　📅 ${esc(r.date)}`:""}</div>`;
+        <div class="soapview-h">🔁 第 ${ri+1} 輪${r.label?`：${esc(r.label)}`:""}</div>`;
     if((r.s||[]).length){
       r.s.forEach((item,si)=>{
         const it=(r.items||[])[si]||{};
@@ -561,13 +578,79 @@ function renderCaseDetail(){
     }
     html+=`</div>`;
   });
+  return html;
+}
+/* 病例詳情：只有一次回診時直接顯示 SOAP 內容；有多次回診（不同日期）時，
+   先列出回診日期清單，點進去才顯示該次回診的 SOAP 輪次，避免全部擠在同一頁。 */
+function renderCaseDetail(){
+  const main=document.getElementById("main");
+  const c=cases.find(x=>x.id===openCaseId);
+  if(!c){ libNav="list"; render(); return; }
 
-  if(c.discussion && c.discussion.trim()){
-    html+=`<div class="discussbox"><div class="h">💬 討論／反思</div><div class="b">${esc(c.discussion)}</div></div>`;
+  const visits=groupVisits(c.soapRounds);
+  if(openVisitKey!=null && !visits.some(v=>v.key===openVisitKey)) openVisitKey=null;
+  const demoText=demoSummary(c.demographics);
+  const headerCard=`<div class="card" style="margin-bottom:10px">
+      <div class="title">📋 ${esc(c.title)}</div>
+      <div class="byline">由 ${esc(c.createdBy?c.createdBy.name:"未知")} 建立・${fmtDate(c.createdAt)}</div>
+      ${demoText?`<div class="demoline"><span class="lbl">👤 </span>${esc(demoText)}</div>`:""}
+    </div>`;
+
+  if(visits.length>1 && openVisitKey==null){
+    // 多次回診：先顯示回診日期清單
+    let html=`<div style="display:flex;gap:8px;margin-bottom:10px">
+        <button class="chip" id="backLib">‹ 返回病例庫</button>
+        ${canEdit(c)?`<button class="chip" id="editThis">✎ 編輯</button>`:""}
+      </div>`;
+    html+=headerCard;
+    html+=`<div class="countLine">共 ${visits.length} 次回診紀錄，點選查看當次 SOAP</div>`;
+    html+=visits.map(v=>`<div class="card" data-visit="${esc(v.key)}" style="cursor:pointer">
+        <div class="row">
+          <div style="flex:1">
+            <div class="title">📅 ${esc(v.date||"未填日期")}</div>
+            <div class="meta">共 ${v.rounds.length} 輪 SOAP</div>
+          </div>
+          <div class="mini" style="align-self:center">›</div>
+        </div>
+      </div>`).join("");
+    if(c.discussion && c.discussion.trim()){
+      html+=`<div class="discussbox"><div class="h">💬 討論／反思</div><div class="b">${esc(c.discussion)}</div></div>`;
+    }
+    main.innerHTML=html;
+    document.getElementById("backLib").onclick=()=>{ libNav="list"; render(); };
+    const editBtn=document.getElementById("editThis");
+    if(editBtn) editBtn.onclick=()=>openCaseEditor(c.id);
+    main.querySelectorAll("[data-visit]").forEach(el=>el.onclick=()=>{
+      openVisitKey=el.dataset.visit; render();
+    });
+    return;
   }
 
+  // 只有一次回診，或已經點進某次回診：顯示該次的 SOAP 輪次
+  const visit = openVisitKey!=null ? visits.find(v=>v.key===openVisitKey) : visits[0];
+  const rounds = visit ? visit.rounds : [];
+  const multi = visits.length>1;
+  let html=`<div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="chip" id="${multi?'backVisits':'backLib'}">‹ ${multi?'返回回診列表':'返回病例庫'}</button>
+      ${canEdit(c)?`<button class="chip" id="editThis">✎ 編輯</button>`:""}
+    </div>`;
+  if(multi){
+    html+=`<div class="card" style="margin-bottom:10px">
+        <div class="title">📋 ${esc(c.title)}</div>
+        <div class="byline">📅 ${esc(visit&&visit.date?visit.date:"未填日期")}</div>
+      </div>`;
+  }else{
+    html+=headerCard;
+  }
+  html+=renderRoundsHTML(rounds);
+  if(!multi && c.discussion && c.discussion.trim()){
+    html+=`<div class="discussbox"><div class="h">💬 討論／反思</div><div class="b">${esc(c.discussion)}</div></div>`;
+  }
   main.innerHTML=html;
-  document.getElementById("backLib").onclick=()=>{ libNav="list"; render(); };
+  const backLib=document.getElementById("backLib");
+  if(backLib) backLib.onclick=()=>{ libNav="list"; render(); };
+  const backVisits=document.getElementById("backVisits");
+  if(backVisits) backVisits.onclick=()=>{ openVisitKey=null; render(); };
   const editBtn=document.getElementById("editThis");
   if(editBtn) editBtn.onclick=()=>openCaseEditor(c.id);
 }
@@ -597,7 +680,7 @@ function renderMine(){
   }
   main.innerHTML=html;
   main.querySelectorAll("[data-open]").forEach(c=>c.onclick=()=>{
-    openCaseId=c.dataset.open; view="library"; libNav="detail";
+    openCaseId=c.dataset.open; view="library"; libNav="detail"; openVisitKey=null;
     document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on", x.dataset.view==="library"));
     render();
   });
