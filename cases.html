@@ -84,6 +84,8 @@
   .tab{flex:1;min-width:72px;text-align:center;padding:9px 0;border:2px solid var(--line);border-radius:16px;
     background:var(--card);color:var(--soft);font-size:13px;font-weight:700;cursor:pointer;transition:.15s;}
   .tab.on{background:var(--teal);color:#fff;border-color:var(--teal);}
+  .tabdot{display:inline-block;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--err);
+    color:#fff;font-size:10px;font-weight:800;line-height:16px;vertical-align:2px;}
 
   main{flex:1;padding:8px 16px 40px;overflow-y:auto;}
   .countLine{font-size:13px;color:var(--soft);margin:6px 2px 12px;}
@@ -156,6 +158,13 @@
     border-radius:16px;padding:14px;margin-bottom:14px;}
   .discussbox .h{font-weight:800;color:#8a5c1e;font-size:14px;margin-bottom:6px;}
   .discussbox .b{font-size:14px;line-height:1.7;white-space:pre-wrap;}
+  .feedbackbox{background:linear-gradient(135deg,var(--teal-soft),var(--card2));border:2px solid var(--teal);
+    border-radius:16px;padding:14px;margin-bottom:12px;}
+  .feedbackbox .h{font-weight:800;color:var(--teal-deep);font-size:14px;margin-bottom:6px;}
+  .feedbackbox .b{font-size:14px;line-height:1.7;white-space:pre-wrap;}
+  .feedbackbox .meta{font-size:12px;color:var(--soft);margin-top:8px;}
+  .pendingtag{display:inline-block;background:var(--err);color:#fff;font-size:12px;font-weight:800;
+    padding:2px 9px;border-radius:10px;margin:4px 4px 0 0;}
 
   .statrow{display:flex;justify-content:space-between;padding:6px 0;font-size:14px;border-bottom:1px solid var(--card2);}
   .statrow:last-child{border-bottom:none;}
@@ -230,7 +239,7 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
 function esc(s){return String(s??"").replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));}
 function clone(o){ return JSON.parse(JSON.stringify(o)); }
 function fmtDate(ts){ if(!ts) return ""; const d=new Date(ts); return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; }
-function blankRound(label, date, newVisit){ return {id:uid(), label:label||"", date:date||"", newVisit:!!newVisit, complaintIdx:[], items:{}, general:{o:"",a:"",p:""}}; }
+function blankRound(label, date, newVisit){ return {id:uid(), label:label||"", date:date||"", newVisit:!!newVisit, createdAt:Date.now(), complaintIdx:[], items:{}, general:{o:"",a:"",p:""}}; }
 function blankDemo(){ return {surname:"", gender:"", age:"", occupation:"", chronicHas:false, chronicDetail:"", sport:"", exerciseFreq:""}; }
 /* 姓氏＋性別 → 稱謂，例如「李先生」「李小姐」；沒填姓氏就退回單純性別 */
 function honorific(d){
@@ -297,6 +306,7 @@ function normalizeCase(c){
       r.newVisit = i===0 || (r.date||"")!==prevDate;
     }
     if(!r.newVisit) r.date="";
+    if(typeof r.createdAt!=="number") r.createdAt=c.createdAt||Date.now();
     if(!r.general) r.general={o:"",a:"",p:""};
     if(!Array.isArray(r.complaintIdx)){
       let oldS=r.s;
@@ -322,6 +332,7 @@ function normalizeCase(c){
   if(typeof c.discussion!=="string") c.discussion="";
   if(!c.demographics || typeof c.demographics!=="object") c.demographics=blankDemo();
   else c.demographics=Object.assign(blankDemo(), c.demographics);
+  if(!c.reviews || typeof c.reviews!=="object") c.reviews={};
   return c;
 }
 
@@ -442,6 +453,8 @@ function groupVisits(rounds){
       if(g.date) byDate.set(g.date, g);
     }
   });
+  // updatedAt：這次回診裡最新一筆輪次的建立時間，管理後台用來判斷「有沒有新內容待批改」
+  groups.forEach(g=>{ g.updatedAt = g.rounds.reduce((m,r)=>Math.max(m, r.createdAt||0), 0); });
   groups.sort((a,b)=>{
     if(!a.date && !b.date) return 0;
     if(!a.date) return 1;
@@ -451,8 +464,32 @@ function groupVisits(rounds){
   return groups;
 }
 
-let adminSub = "cases";      // cases | trainees
+let adminSub = "overview";   // overview | cases | trainees
 let adminExpand = null;      // 展開中的學員 id
+
+/* 批改：每次回診紀錄（visit）都可以有一筆管理者回饋，用 case.reviews[visitKey] 記錄。
+   只要這次回診「最後更新時間」比「最後批改時間」還新，就算「待批改」——
+   不管是全新的回診紀錄，還是批改後學員又補充內容，都會重新出現在待批改清單。 */
+function pendingReviewList(){
+  const list=[];
+  cases.forEach(c=>{
+    groupVisits(c.soapRounds).forEach(v=>{
+      const rv=(c.reviews||{})[v.key];
+      const reviewedAt = rv ? (rv.reviewedAt||0) : 0;
+      if(reviewedAt < (v.updatedAt||0)) list.push({c, v});
+    });
+  });
+  list.sort((a,b)=>(b.v.updatedAt||0)-(a.v.updatedAt||0));
+  return list;
+}
+function pendingReviewCount(){ return pendingReviewList().length; }
+/* 每次 render() 都刷新分頁上的待批改通知紅點 */
+function updateTabBadges(){
+  const tab=document.querySelector('.tab[data-view="admin"]');
+  if(!tab) return;
+  const n=pendingReviewCount();
+  tab.innerHTML = "管理後台"+(n?` <span class="tabdot">${n>99?"99+":n}</span>`:"");
+}
 
 /* ===== 儲存 ===== */
 function saveCases(){ localStorage.setItem(CASE_KEY,JSON.stringify(cases)); cloudPush(); }
@@ -553,6 +590,7 @@ document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{
 /* ===== render dispatcher ===== */
 function render(){
   if(!ensureIdentity()) return;
+  updateTabBadges();
   if(view==="library"){ libNav==="detail" ? renderCaseDetail() : renderLibrary(); }
   else if(view==="mine") renderMine();
   else renderAdmin();
@@ -670,15 +708,21 @@ function renderCaseDetail(){
     if(canEdit(c)) html+=`<button class="chip primary wide" id="addVisit" style="margin-bottom:12px;padding:12px">＋ 新增回診紀錄（新日期）</button>`;
     html+=`<div class="countLine">共 ${visits.length} 次回診紀錄，點選查看當次 SOAP</div>`;
     html+= visits.length
-      ? visits.map(v=>`<div class="card" data-visit="${esc(v.key)}" style="cursor:pointer">
+      ? visits.map(v=>{
+          const rv=(c.reviews||{})[v.key];
+          const pending = !rv || (rv.reviewedAt||0) < (v.updatedAt||0);
+          const statusTag = canEdit(c) ? (pending ? `<span class="pendingtag">待批改</span>` : `<span class="tag">✅ 已批改</span>`) : "";
+          return `<div class="card" data-visit="${esc(v.key)}" style="cursor:pointer">
           <div class="row">
             <div style="flex:1">
               <div class="title">📅 ${esc(v.date||"未填日期")}</div>
               <div class="meta">共 ${v.rounds.length} 輪 SOAP</div>
+              ${statusTag?`<div style="margin-top:6px">${statusTag}</div>`:""}
             </div>
             <div class="mini" style="align-self:center">›</div>
           </div>
-        </div>`).join("")
+        </div>`;
+        }).join("")
       : `<div class="empty"><div class="big">還沒有任何回診紀錄</div>按上方按鈕新增第一次回診吧。</div>`;
     if(c.discussion && c.discussion.trim()){
       html+=`<div class="discussbox"><div class="h">💬 討論／反思</div><div class="b">${esc(c.discussion)}</div></div>`;
@@ -707,10 +751,46 @@ function renderCaseDetail(){
       <div class="byline">📅 ${esc(visit&&visit.date?visit.date:"未填日期")}</div>
     </div>`;
   html+=renderRoundsHTML(rounds, c.complaints);
+
+  // 批改與回饋：管理者可以針對這次回診紀錄寫回饋、指派作業；學員（含病例建立者）看到唯讀版本
+  const review = visit ? (c.reviews||{})[visit.key] : null;
+  const isPending = visit && (!review || (review.reviewedAt||0) < (visit.updatedAt||0));
+  if(visit && adminUnlocked){
+    html+=`<div class="feedbackbox">
+        <div class="h">🩺 批改與回饋${isPending?` <span class="pendingtag">待批改</span>`:` <span class="tag">✅ 已批改</span>`}</div>
+        <label style="margin-top:0">回饋（這次評估／處置寫得好的地方、需要調整的地方…）</label>
+        <textarea id="rvFeedback" class="big" placeholder="請針對這次回診紀錄給予回饋">${esc(review?review.feedback:"")}</textarea>
+        <label>指派作業／加強練習（選填，針對問題點給建議）</label>
+        <textarea id="rvHomework" class="big" placeholder="例如：請針對肩關節活動度受限，多練習相關的鑑別診斷觸診技巧…">${esc(review?review.homework:"")}</textarea>
+        ${review&&review.reviewedAt?`<div class="meta">上次批改：${esc(review.reviewedBy||"")}・${fmtDate(review.reviewedAt)}</div>`:""}
+        <button class="chip primary wide" id="rvSave" style="margin-top:10px;padding:12px">送出批改</button>
+      </div>`;
+  }else if(review && ((review.feedback||"").trim() || (review.homework||"").trim())){
+    html+=`<div class="feedbackbox">
+        <div class="h">🩺 老師回饋</div>
+        ${(review.feedback||"").trim()?`<div class="b">${esc(review.feedback)}</div>`:""}
+        ${(review.homework||"").trim()?`<div class="b" style="margin-top:${(review.feedback||"").trim()?"10px":"0"}"><b>📌 指派作業：</b>${esc(review.homework)}</div>`:""}
+        <div class="meta">${esc(review.reviewedBy||"")}・${fmtDate(review.reviewedAt)}</div>
+      </div>`;
+  }else if(canEdit(c)){
+    html+=`<div class="mini" style="margin:6px 0 14px">⏳ 這次回診紀錄尚未批改</div>`;
+  }
+
   main.innerHTML=html;
   document.getElementById("backVisits").onclick=()=>{ openVisitKey=null; render(); };
   const editBtn=document.getElementById("editThis");
   if(editBtn) editBtn.onclick=()=>openCaseEditor(c.id);
+  const rvSave=document.getElementById("rvSave");
+  if(rvSave) rvSave.onclick=()=>{
+    if(!c.reviews) c.reviews={};
+    c.reviews[visit.key]={
+      feedback: document.getElementById("rvFeedback").value,
+      homework: document.getElementById("rvHomework").value,
+      reviewedAt: Date.now(),
+      reviewedBy: myName
+    };
+    saveCases(); render();
+  };
 }
 
 /* ----- 我的紀錄 ----- */
@@ -763,25 +843,45 @@ function renderAdmin(){
     return;
   }
 
+  const pending = pendingReviewList();
   let html=`<div class="chip-row">
+      <button class="chip ${adminSub==='overview'?'on':''}" data-asub="overview">總覽${pending.length?` 🔴${pending.length}`:""}</button>
       <button class="chip ${adminSub==='cases'?'on':''}" data-asub="cases">病例管理</button>
       <button class="chip ${adminSub==='trainees'?'on':''}" data-asub="trainees">學員紀錄</button>
       <button class="chip" id="adminLock" style="margin-left:auto">🔒 鎖定</button>
     </div>`;
 
-  if(adminSub==="cases"){
+  if(adminSub==="overview"){
+    html+=`<div class="countLine">${pending.length?`🔔 共 ${pending.length} 筆回診紀錄待批改`:"🎉 目前沒有待批改的回診紀錄"}</div>`;
+    html+= pending.length
+      ? pending.map(({c,v})=>`<div class="card" data-goto="${c.id}|${esc(v.key)}" style="cursor:pointer">
+          <div class="row">
+            <div style="flex:1">
+              <div class="title">📋 ${esc(c.title)}</div>
+              <div class="byline">👤 ${esc(c.createdBy?c.createdBy.name:"未知")}・📅 ${esc(v.date||"未填日期")}・共 ${v.rounds.length} 輪 SOAP</div>
+              <div style="margin-top:6px"><span class="pendingtag">待批改</span></div>
+            </div>
+            <div class="mini" style="align-self:center">›</div>
+          </div>
+        </div>`).join("")
+      : `<div class="empty"><div class="big">目前沒有新的回診紀錄待批改</div>學員新增回診紀錄後會出現在這裡。</div>`;
+  }else if(adminSub==="cases"){
     html+=`<button class="chip primary wide" id="addCase" style="margin-bottom:12px;padding:12px">＋ 新增病例</button>`;
     if(!cases.length){
       html+=`<div class="empty"><div class="big">還沒有病例</div>按上方按鈕新增第一個病例。</div>`;
     }else{
-      html+=cases.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(c=>`<div class="card"><div class="adminrow">
+      html+=cases.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(c=>{
+        const casePending = pending.some(p=>p.c.id===c.id);
+        return `<div class="card"><div class="adminrow">
           <div class="info">
             <div class="title">${esc(c.title)}</div>
             <div class="meta">由 ${esc(c.createdBy?c.createdBy.name:"未知")} 建立・${(c.soapRounds||[]).length}輪SOAP</div>
+            ${casePending?`<div style="margin-top:6px"><span class="pendingtag">有待批改的回診紀錄</span></div>`:""}
           </div>
           <button class="iconbtn" data-edit="${c.id}">✎</button>
           <button class="iconbtn del" data-del="${c.id}">🗑</button>
-        </div></div>`).join("");
+        </div></div>`;
+      }).join("");
     }
   }else{
     if(!trainees.length){
@@ -822,6 +922,12 @@ function renderAdmin(){
   });
   main.querySelectorAll("[data-expand]").forEach(el=>el.onclick=()=>{
     const id=el.dataset.expand; adminExpand = adminExpand===id ? null : id; render();
+  });
+  main.querySelectorAll("[data-goto]").forEach(el=>el.onclick=()=>{
+    const [cid,vkey]=el.dataset.goto.split("|");
+    openCaseId=cid; openVisitKey=vkey; view="library"; libNav="detail";
+    document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on", x.dataset.view==="library"));
+    render();
   });
 }
 
