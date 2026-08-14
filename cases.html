@@ -333,6 +333,7 @@ function normalizeCase(c){
   if(!c.demographics || typeof c.demographics!=="object") c.demographics=blankDemo();
   else c.demographics=Object.assign(blankDemo(), c.demographics);
   if(!c.reviews || typeof c.reviews!=="object") c.reviews={};
+  if(!c.questions || typeof c.questions!=="object") c.questions={};
   return c;
 }
 
@@ -466,17 +467,21 @@ function groupVisits(rounds){
 
 let adminSub = "overview";   // overview | cases | trainees
 let adminExpand = null;      // 展開中的學員 id
+let reviewFromAdmin = false; // true = 目前顯示的病例詳情是從「管理後台」點進來批改的，不是學員在病例庫瀏覽
 
 /* 批改：每次回診紀錄（visit）都可以有一筆管理者回饋，用 case.reviews[visitKey] 記錄。
-   只要這次回診「最後更新時間」比「最後批改時間」還新，就算「待批改」——
-   不管是全新的回診紀錄，還是批改後學員又補充內容，都會重新出現在待批改清單。 */
+   只要這次回診「最後更新時間」（新增內容、或學員提出新問題）比「最後批改時間」還新，
+   就算「待批改」——不管是全新的回診紀錄、批改後學員又補充內容、或學員追加提問，
+   都會重新出現在待批改清單。 */
 function pendingReviewList(){
   const list=[];
   cases.forEach(c=>{
     groupVisits(c.soapRounds).forEach(v=>{
       const rv=(c.reviews||{})[v.key];
+      const qv=(c.questions||{})[v.key];
       const reviewedAt = rv ? (rv.reviewedAt||0) : 0;
-      if(reviewedAt < (v.updatedAt||0)) list.push({c, v});
+      const latest = Math.max(v.updatedAt||0, qv?(qv.askedAt||0):0);
+      if(reviewedAt < latest) list.push({c, v, question: qv&&(qv.text||"").trim()?qv:null});
     });
   });
   list.sort((a,b)=>(b.v.updatedAt||0)-(a.v.updatedAt||0));
@@ -583,6 +588,7 @@ document.getElementById("mask").onclick=closeSheet;
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{
   view=b.dataset.view;
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===b));
+  reviewFromAdmin=false; // 直接點分頁一律回到該分頁的預設畫面，不殘留「從管理後台批改」的狀態
   if(view==="library"){ libNav="list"; openCaseId=null; openVisitKey=null; }
   render();
 });
@@ -593,7 +599,7 @@ function render(){
   updateTabBadges();
   if(view==="library"){ libNav==="detail" ? renderCaseDetail() : renderLibrary(); }
   else if(view==="mine") renderMine();
-  else renderAdmin();
+  else if(view==="admin"){ (reviewFromAdmin && openCaseId && adminUnlocked) ? renderCaseDetail() : renderAdmin(); }
 }
 
 function canEdit(c){ return adminUnlocked || (c.createdBy && c.createdBy.id===myId); }
@@ -698,10 +704,12 @@ function renderCaseDetail(){
       ${demoText?`<div class="demoline"><span class="lbl">👤 </span>${esc(demoText)}</div>`:""}
     </div>`;
 
+  const fromAdmin = reviewFromAdmin; // 從管理後台「總覽」點進來批改，還是學員在病例庫瀏覽
+
   if(openVisitKey==null){
     // 病例總覽：一律以回診日期分卡片呈現（這個人幾月幾號來過幾次），不直接顯示 SOAP 內容
     let html=`<div style="display:flex;gap:8px;margin-bottom:10px">
-        <button class="chip" id="backLib">‹ 返回病例庫</button>
+        <button class="chip" id="backLib">‹ ${fromAdmin?"返回總覽":"返回病例庫"}</button>
         ${canEdit(c)?`<button class="chip" id="editThis">✎ 編輯</button>`:""}
       </div>`;
     html+=headerCard;
@@ -710,7 +718,9 @@ function renderCaseDetail(){
     html+= visits.length
       ? visits.map(v=>{
           const rv=(c.reviews||{})[v.key];
-          const pending = !rv || (rv.reviewedAt||0) < (v.updatedAt||0);
+          const qv=(c.questions||{})[v.key];
+          const latest=Math.max(v.updatedAt||0, qv?(qv.askedAt||0):0);
+          const pending = !rv || (rv.reviewedAt||0) < latest;
           const statusTag = canEdit(c) ? (pending ? `<span class="pendingtag">待批改</span>` : `<span class="tag">✅ 已批改</span>`) : "";
           return `<div class="card" data-visit="${esc(v.key)}" style="cursor:pointer">
           <div class="row">
@@ -728,7 +738,11 @@ function renderCaseDetail(){
       html+=`<div class="discussbox"><div class="h">💬 討論／反思</div><div class="b">${esc(c.discussion)}</div></div>`;
     }
     main.innerHTML=html;
-    document.getElementById("backLib").onclick=()=>{ libNav="list"; render(); };
+    document.getElementById("backLib").onclick=()=>{
+      if(fromAdmin){ reviewFromAdmin=false; openCaseId=null; openVisitKey=null; adminSub="overview"; }
+      else libNav="list";
+      render();
+    };
     const editBtn=document.getElementById("editThis");
     if(editBtn) editBtn.onclick=()=>openCaseEditor(c.id);
     const addVisitBtn=document.getElementById("addVisit");
@@ -742,6 +756,7 @@ function renderCaseDetail(){
   // 已點進某次回診：顯示該次的 SOAP 輪次
   const visit = visits.find(v=>v.key===openVisitKey);
   const rounds = visit ? visit.rounds : [];
+  const isOwner = c.createdBy && c.createdBy.id===myId;
   let html=`<div style="display:flex;gap:8px;margin-bottom:10px">
       <button class="chip" id="backVisits">‹ 返回回診列表</button>
       ${canEdit(c)?`<button class="chip" id="editThis">✎ 編輯</button>`:""}
@@ -752,10 +767,21 @@ function renderCaseDetail(){
     </div>`;
   html+=renderRoundsHTML(rounds, c.complaints);
 
-  // 批改與回饋：管理者可以針對這次回診紀錄寫回饋、指派作業；學員（含病例建立者）看到唯讀版本
   const review = visit ? (c.reviews||{})[visit.key] : null;
+  const question = visit ? (c.questions||{})[visit.key] : null;
   const isPending = visit && (!review || (review.reviewedAt||0) < (visit.updatedAt||0));
-  if(visit && adminUnlocked){
+
+  /* 批改與回饋：這格「批改」表單只在管理後台裡批改流程中出現（reviewFromAdmin），
+     不會出現在學員平常瀏覽病例庫的畫面裡——即使目前這台裝置的管理 PIN 已解鎖也一樣，
+     必須是從「管理後台 → 總覽」點進來的批改流程才看得到可編輯的表單。 */
+  if(visit && fromAdmin && adminUnlocked){
+    if(question){
+      html+=`<div class="discussbox">
+          <div class="h">❓ 學員提問</div>
+          <div class="b">${esc(question.text)}</div>
+          <div class="meta" style="margin-top:6px;color:#8a5c1e">${esc(question.askedBy||"")}・${fmtDate(question.askedAt)}</div>
+        </div>`;
+    }
     html+=`<div class="feedbackbox">
         <div class="h">🩺 批改與回饋${isPending?` <span class="pendingtag">待批改</span>`:` <span class="tag">✅ 已批改</span>`}</div>
         <label style="margin-top:0">回饋（這次評估／處置寫得好的地方、需要調整的地方…）</label>
@@ -765,15 +791,27 @@ function renderCaseDetail(){
         ${review&&review.reviewedAt?`<div class="meta">上次批改：${esc(review.reviewedBy||"")}・${fmtDate(review.reviewedAt)}</div>`:""}
         <button class="chip primary wide" id="rvSave" style="margin-top:10px;padding:12px">送出批改</button>
       </div>`;
-  }else if(review && ((review.feedback||"").trim() || (review.homework||"").trim())){
-    html+=`<div class="feedbackbox">
-        <div class="h">🩺 老師回饋</div>
-        ${(review.feedback||"").trim()?`<div class="b">${esc(review.feedback)}</div>`:""}
-        ${(review.homework||"").trim()?`<div class="b" style="margin-top:${(review.feedback||"").trim()?"10px":"0"}"><b>📌 指派作業：</b>${esc(review.homework)}</div>`:""}
-        <div class="meta">${esc(review.reviewedBy||"")}・${fmtDate(review.reviewedAt)}</div>
-      </div>`;
-  }else if(canEdit(c)){
-    html+=`<div class="mini" style="margin:6px 0 14px">⏳ 這次回診紀錄尚未批改</div>`;
+  }else{
+    // 學員的介面（無論是不是這個病例的建立者）：只看得到老師回饋的唯讀卡片，看不到批改表單
+    if(review && ((review.feedback||"").trim() || (review.homework||"").trim())){
+      html+=`<div class="feedbackbox">
+          <div class="h">🩺 老師回饋</div>
+          ${(review.feedback||"").trim()?`<div class="b">${esc(review.feedback)}</div>`:""}
+          ${(review.homework||"").trim()?`<div class="b" style="margin-top:${(review.feedback||"").trim()?"10px":"0"}"><b>📌 指派作業：</b>${esc(review.homework)}</div>`:""}
+          <div class="meta">${esc(review.reviewedBy||"")}・${fmtDate(review.reviewedAt)}</div>
+        </div>`;
+    }else if(isOwner){
+      html+=`<div class="mini" style="margin:6px 0 14px">⏳ 這次回診紀錄尚未批改</div>`;
+    }
+    // 提問區：只有這個病例的建立者能針對自己的回診紀錄提問給管理員看
+    if(visit && isOwner){
+      html+=`<div class="soapedit" style="border-color:var(--amber)">
+          <label style="margin-top:0">❓ 我的提問（給管理員看）</label>
+          <textarea id="qText" placeholder="這次評估或處置有什麼想問管理員的嗎？">${esc(question?question.text:"")}</textarea>
+          ${question&&question.askedAt?`<div class="mini" style="margin-top:4px">已送出：${fmtDate(question.askedAt)}</div>`:""}
+          <button class="chip wide" id="qSave" style="margin-top:8px">送出提問</button>
+        </div>`;
+    }
   }
 
   main.innerHTML=html;
@@ -789,6 +827,14 @@ function renderCaseDetail(){
       reviewedAt: Date.now(),
       reviewedBy: myName
     };
+    saveCases(); render();
+  };
+  const qSave=document.getElementById("qSave");
+  if(qSave) qSave.onclick=()=>{
+    const text=document.getElementById("qText").value;
+    if(!c.questions) c.questions={};
+    if(!text.trim()){ delete c.questions[visit.key]; }
+    else c.questions[visit.key]={ text, askedBy:myName, askedAt:Date.now() };
     saveCases(); render();
   };
 }
@@ -854,12 +900,13 @@ function renderAdmin(){
   if(adminSub==="overview"){
     html+=`<div class="countLine">${pending.length?`🔔 共 ${pending.length} 筆回診紀錄待批改`:"🎉 目前沒有待批改的回診紀錄"}</div>`;
     html+= pending.length
-      ? pending.map(({c,v})=>`<div class="card" data-goto="${c.id}|${esc(v.key)}" style="cursor:pointer">
+      ? pending.map(({c,v,question})=>`<div class="card" data-goto="${c.id}|${esc(v.key)}" style="cursor:pointer">
           <div class="row">
             <div style="flex:1">
               <div class="title">📋 ${esc(c.title)}</div>
               <div class="byline">👤 ${esc(c.createdBy?c.createdBy.name:"未知")}・📅 ${esc(v.date||"未填日期")}・共 ${v.rounds.length} 輪 SOAP</div>
-              <div style="margin-top:6px"><span class="pendingtag">待批改</span></div>
+              <div style="margin-top:6px"><span class="pendingtag">待批改</span>${question?`<span class="tag amber">❓ 學員提問</span>`:""}</div>
+              ${question?`<div class="mini" style="margin-top:4px">「${esc(question.text.length>40?question.text.slice(0,40)+"…":question.text)}」</div>`:""}
             </div>
             <div class="mini" style="align-self:center">›</div>
           </div>
@@ -925,8 +972,7 @@ function renderAdmin(){
   });
   main.querySelectorAll("[data-goto]").forEach(el=>el.onclick=()=>{
     const [cid,vkey]=el.dataset.goto.split("|");
-    openCaseId=cid; openVisitKey=vkey; view="library"; libNav="detail";
-    document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on", x.dataset.view==="library"));
+    openCaseId=cid; openVisitKey=vkey; reviewFromAdmin=true;
     render();
   });
 }
